@@ -8,7 +8,7 @@
   (-> (format "%.2f" (double value)) (str/replace "." ",")))
 
 (defn calculate-loan
-  [purchase-price down-payment annual-interest-percent monthly-fee 
+  [purchase-price down-payment annual-interest-percent monthly-fee
    monthly-operating-cost annual-income tax-low-percent tax-high-percent extra-amortization?]
   (let [loan (- purchase-price down-payment)
         annual-interest (/ annual-interest-percent 100.0)
@@ -19,6 +19,7 @@
                                      (> loan-to-value 0.70) 2.0
                                      (> loan-to-value 0.50) 1.0
                                      :else 0.0)
+
         debt-to-income (if (zero? annual-income) Double/POSITIVE_INFINITY (/ loan annual-income))
         extra-amortization-percent (if (and extra-amortization? (> debt-to-income 4.5)) 1.0 0.0)
         total-amortization-percent (+ basic-amortization-percent extra-amortization-percent)

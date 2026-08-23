@@ -1,7 +1,7 @@
 (ns gui
   (:import [java.awt BorderLayout Color Dimension Font GridLayout Insets]
            [javax.swing BorderFactory JButton JCheckBox JFrame JLabel JPanel
-                        JScrollPane JTextArea JTextField SwingConstants JSlider]))
+            JScrollPane JTextArea JTextField SwingConstants JSlider]))
 
 (defn- add-row! [panel label component]
   (.add panel (JLabel. label SwingConstants/RIGHT))

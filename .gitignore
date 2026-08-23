@@ -1,13 +1,352 @@
-/target
-/classes
-/checkouts
-profiles.clj
-pom.xml
-pom.xml.asc
-*.jar
-*.class
-/.lein-*
+# ------------------------------------------------------------------------------
+# Leiningen / Clojure build artifacts
+# ------------------------------------------------------------------------------
+
+# Leiningen build output
+/target/
+/classes/
+
+# Dependency and classpath caches
+/.cpcache/
+/.checkouts/
+/checkouts/
 /.nrepl-port
-/.prepl-port
-.hgignore
-.hg/
+
+# Leiningen local files
+/.lein-failures
+/.lein-repl-history
+/leiningen-*.log
+
+# Generated Maven files
+# Remove these entries if you intentionally version generated or customized POMs.
+/pom.xml
+/pom.properties
+
+# Local Leiningen profiles may contain credentials or machine-specific settings
+/profiles.clj
+
+# ------------------------------------------------------------------------------
+# Compiled and packaged artifacts
+# ------------------------------------------------------------------------------
+
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar
+*.tar.gz
+
+# Native libraries
+*.dll
+*.dylib
+*.so
+
+# ------------------------------------------------------------------------------
+# Clojure tooling caches
+# ------------------------------------------------------------------------------
+
+# clj-kondo cache
+/.clj-kondo/.cache/
+
+# Clojure language server cache
+/.lsp/.cache/
+
+# General Clojure / JVM caches
+/.clojure/
+/.clj-cache/
+
+# Babashka caches, if used
+/.bb/
+/.bb/
+
+# ------------------------------------------------------------------------------
+# Test and coverage output
+# ------------------------------------------------------------------------------
+
+/coverage/
+/.coverage/
+/htmlcov/
+/test-results/
+/test-output/
+/reports/
+/junit/
+/junit.xml
+*.exec
+*.lcov
+
+# Kaocha
+/.kaocha/
+
+# ------------------------------------------------------------------------------
+# Java / JVM crash and diagnostic files
+# ------------------------------------------------------------------------------
+
+hs_err_pid*.log
+replay_pid*.log
+java_pid*.hprof
+*.hprof
+*.dump
+*.heapdump
+
+# ------------------------------------------------------------------------------
+# REPL and development files
+# ------------------------------------------------------------------------------
+
+# nREPL port files
+.nrepl-port
+
+# Common REPL history files
+.repl-history
+.clj-repl-history
+.lein-repl-history
+
+# Local development environment files
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Local secrets and credentials
+secrets.edn
+secret.edn
+credentials.edn
+local.edn
+config/local.edn
+resources/config/local.edn
+
+# ------------------------------------------------------------------------------
+# Editors and IDEs
+# ------------------------------------------------------------------------------
+
+# IntelliJ IDEA / Cursive
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# Emacs
+.dir-locals.el
+.emacs.d/
+.#*
+*~
+
+# Vim / Neovim
+*.swp
+*.swo
+*.swn
+*.un~
+[nn]vim/
+Session.vim
+.vimrc.local
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Visual Studio
+.vs/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/.nb-gradle/
+
+# ------------------------------------------------------------------------------
+# Operating systems
+# ------------------------------------------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# macOS folders
+.DocumentRevisions-V100/
+.fseventsd/
+.Spotlight-V100/
+.TemporaryItems/
+.Trashes/
+.VolumeIcon.icns
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows installer files
+*.cab
+*.msi
+*.msix
+
+# Linux
+.directory
+.Trash-*
+
+# ------------------------------------------------------------------------------
+# Logs and temporary files
+# ------------------------------------------------------------------------------
+
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*.pid
+
+/log/
+/logs/
+/tmp/
+/temp/
+
+# ------------------------------------------------------------------------------
+# Node.js tooling, if used for frontend assets
+# ------------------------------------------------------------------------------
+
+node_modules/
+.npm/
+.npmrc
+.yarn/
+.yarn-cache/
+.pnpm-store/
+bower_components/
+
+# Build output from common frontend tools
+/dist/
+/build/
+/.next/
+/.nuxt/
+/.cache/
+.parcel-cache/
+
+# Uncomment if you use a generated frontend asset directory:
+# /resources/public/js/
+# /resources/public/css/
+
+# ------------------------------------------------------------------------------
+# Python tooling, if used for scripts or tooling
+# ------------------------------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+ENV/
+env/
+
+# ------------------------------------------------------------------------------
+# Docker and local infrastructure
+# ------------------------------------------------------------------------------
+
+# Local Docker override files may contain machine-specific settings
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Local Kubernetes files
+*.secret.yaml
+*.secret.yml
+.envrc
+
+# ------------------------------------------------------------------------------
+# Databases and local data
+# ------------------------------------------------------------------------------
+
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+/data/
+/local-data/
+
+# ------------------------------------------------------------------------------
+# Generated documentation
+# ------------------------------------------------------------------------------
+
+/doc/
+docs/_build/
+site/
+
+# Keep manually maintained documentation examples if needed:
+# !/doc/example.edn
+
+# ------------------------------------------------------------------------------
+# Cloud and deployment tooling
+# ------------------------------------------------------------------------------
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Serverless and deployment output
+.serverless/
+.aws-sam/
+.cdk.out/
+
+# ------------------------------------------------------------------------------
+# Local scripts and machine-specific configuration
+# ------------------------------------------------------------------------------
+
+# direnv
+.envrc
+
+# Local task-runner state
+.task/
+
+# Developer-specific configuration
+*.local.edn
+*.local.clj
+*.local.cljs
+*.local.cljc
+
+# ------------------------------------------------------------------------------
+# Generated files
+# ------------------------------------------------------------------------------
+
+*.generated
+*.generated.*
+/generated/
+/resources/generated/
+/src/generated/
+
+# ------------------------------------------------------------------------------
+# Optional: large local assets
+# ------------------------------------------------------------------------------
+
+# Uncomment if your project stores downloaded or generated assets locally:
+# /resources/assets/
+# /resources/uploads/
+# /downloads/
+
+# ------------------------------------------------------------------------------
+# Optional: generated API/client files
+# ------------------------------------------------------------------------------
+
+# Uncomment if generated from OpenAPI, protobuf, GraphQL, etc.:
+# /src/generated/
+# /resources/openapi-generated/
