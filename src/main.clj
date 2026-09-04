@@ -133,7 +133,8 @@
       nil)))
 
 (def field-keys
-  [[:address-f :address]
+  [[:name-f :name]
+   [:address-f :address]
    [:comment-f :comment]
    [:listing-url-f :listing-url]
    [:p-price-f :purchase-price]
@@ -189,10 +190,12 @@
          :result-text (.getText (:results ui))))
 
 (defn object-label [index object]
-  (let [address (str/trim (or (:address object) ""))]
-    (if (str/blank? address)
-      (str "Objekt " (inc index))
-      address)))
+  (let [name (str/trim (or (:name object) ""))
+        address (str/trim (or (:address object) ""))]
+    (cond
+      (not (str/blank? name)) name
+      (not (str/blank? address)) address
+      :else (str "Objekt " (inc index)))))
 
 (defn refresh-objects-menu! [objects-menu objects load-object!]
   (.removeAll objects-menu)
@@ -235,21 +238,21 @@
               (gui/show-current-object! ui label)
               (reset! saved-state (editable-state ui)))
             (save-current! []
-              (when-let [calculation (calculate-ui! ui)]
-                (let [address (str/trim (.getText (:address-f ui)))]
-                  (if (str/blank? address)
-                    (do
-                      (JOptionPane/showMessageDialog
-                       (:frame ui)
-                       "Ange en adress innan objektet sparas."
-                       "Adress saknas"
-                       JOptionPane/WARNING_MESSAGE)
-                      false)
+              (let [object-name (str/trim (.getText (:name-f ui)))]
+                (if (str/blank? object-name)
+                  (do
+                    (gui/show-error!
+                     (:frame ui)
+                     "Objektnamn saknas"
+                     "Ange ett namn för objektet innan du sparar det.")
+                    (.requestFocusInWindow (:name-f ui))
+                    false)
+                  (when-let [calculation (calculate-ui! ui)]
                     (let [object (assoc (object-from-ui ui calculation)
-                                        :address address)
+                                        :name object-name)
                           saved-objects (store/save-object! object)]
                       (gui/show-link! (:listing-link ui) (:listing-url object))
-                      (gui/show-current-object! ui address)
+                      (gui/show-current-object! ui object-name)
                       (reset! saved-state (editable-state ui))
                       (refresh-objects-menu!
                        objects-menu saved-objects switch-object!)

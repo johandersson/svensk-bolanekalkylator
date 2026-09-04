@@ -1,12 +1,12 @@
 (ns gui
   (:require [clojure.string :as str])
   (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
-            Font Graphics2D GridLayout Insets RenderingHints]
+            Font Graphics2D GridLayout Insets Rectangle RenderingHints]
            [java.net URI]
            [javax.swing BorderFactory JButton JCheckBox JDialog JFrame JLabel
             JPanel JEditorPane JList JMenu JMenuBar JOptionPane JScrollPane
             JTextArea JTextField SwingConstants JSlider JMenuItem UIManager
-            ListSelectionModel WindowConstants]
+            ListSelectionModel Scrollable WindowConstants]
            [javax.swing.border AbstractBorder]
            [javax.swing.event HyperlinkEvent$EventType]))
 
@@ -51,6 +51,19 @@
          (.dispose graphics-2d))))
     (.setOpaque false)
     (.setBorder (BorderFactory/createEmptyBorder 18 18 22 22))))
+
+(defn- scrollable-panel [layout]
+  (proxy [JPanel Scrollable] [layout]
+    (getPreferredScrollableViewportSize []
+      (.getPreferredSize this))
+    (getScrollableUnitIncrement [_visible-rect _orientation _direction]
+      24)
+    (getScrollableBlockIncrement [^Rectangle visible-rect orientation _direction]
+      (if (= orientation SwingConstants/VERTICAL)
+        (- (.height visible-rect) 24)
+        (- (.width visible-rect) 24)))
+    (getScrollableTracksViewportWidth [] true)
+    (getScrollableTracksViewportHeight [] false)))
 
 (defn- rounded-button [text color hover-color]
   (doto
@@ -121,6 +134,39 @@
   (.setText (:current-object-label ui) (str "Öppet objekt: " object-name))
   (.setTitle (:frame ui)
              (str object-name " · Svensk bolånekalkylator")))
+
+(defn show-error! [frame title-text message]
+  (let [dialog (JDialog. frame title-text true)
+        root (JPanel. (BorderLayout. 0 18))
+        title (JLabel. title-text)
+        body (JLabel. (str "<html><div style='width:320px'>"
+                           (escape-html message) "</div></html>"))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 0 0))
+        close-btn (rounded-button "Okej" blue blue-hover)]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 24 24 22 24))
+    (.setFont title (Font. ui-font Font/BOLD 22))
+    (.setForeground title text-primary)
+    (.setFont body (Font. ui-font Font/PLAIN 14))
+    (.setForeground body text-secondary)
+    (.setOpaque actions false)
+    (.setPreferredSize close-btn (Dimension. 100 42))
+    (.add actions close-btn)
+    (.addActionListener
+     close-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose dialog))))
+    (.add root title BorderLayout/NORTH)
+    (.add root body BorderLayout/CENTER)
+    (.add root actions BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.setDefaultButton (.getRootPane dialog) close-btn)
+    (.pack dialog)
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    (.setVisible dialog true)))
 
 (defn choose-object! [frame labels]
   (let [selected-index (atom nil)
@@ -213,6 +259,7 @@
         objects-menu (JMenu. "Objekt")
         rate-slider (JSlider. 0 200 0)
         rate-label (JLabel. "")
+        name-f (JTextField.)
         address-f (JTextField.)
         comment-f (JTextField.)
         listing-url-f (JTextField.)
@@ -239,8 +286,8 @@
     (.setJMenuBar frame menu-bar)
     (.setBackground menu-bar surface)
     (.setBorder menu-bar (BorderFactory/createMatteBorder 0 0 1 0 border-color))
-    (doseq [field [address-f comment-f listing-url-f p-price-f d-pay-f fee-f
-                   op-cost-f income-f t-low-f t-high-f]]
+    (doseq [field [name-f address-f comment-f listing-url-f p-price-f d-pay-f
+             fee-f op-cost-f income-f t-low-f t-high-f]]
       (style-field! field))
     (.setFont extra-amort-cb (Font. ui-font Font/PLAIN 13))
     (.setForeground extra-amort-cb text-primary)
@@ -277,6 +324,7 @@
                 frame "Kunde inte öppna länken." "Länkfel"
                 JOptionPane/ERROR_MESSAGE)))))))
 
+    (add-row! form "Objektnamn *:" name-f)
     (add-row! form "Adress:" address-f)
     (add-row! form "Kommentar:" comment-f)
     (add-row! form "Annonsens webbadress:" listing-url-f)
@@ -296,16 +344,18 @@
     (.add form extra-amort-cb)
     (.add form (JLabel. ""))
 
-    (let [main-panel (JPanel. (BorderLayout. 0 16))
+    (let [main-panel (scrollable-panel (BorderLayout. 0 16))
           header (JPanel. (BorderLayout.))
           heading (JPanel. (GridLayout. 0 1 0 2))
-          title (JLabel. "Bolånekalkyl")
-          subtitle (JLabel. "Jämför boendekostnaden och spara intressanta objekt")
-          scroll-pane (JScrollPane. results)
+          title (JLabel. "Kalkylresultat")
+          subtitle (JLabel. "Månadskostnad, ränta och amortering")
+          results-scroll-pane (JScrollPane. results)
           results-panel (shadow-panel (BorderLayout.))
-          btn-panel (JPanel.)]
+          btn-panel (JPanel.)
+          app-scroll-pane (JScrollPane. main-panel)]
       (.setBackground main-panel background)
       (.setBorder main-panel (BorderFactory/createEmptyBorder 20 24 20 24))
+      (.setPreferredSize main-panel (Dimension. 700 1120))
       (.setOpaque header false)
       (.setOpaque heading false)
       (.setFont title (Font. ui-font Font/BOLD 26))
@@ -316,9 +366,13 @@
       (.add heading subtitle)
       (.add header heading BorderLayout/CENTER)
       (.add header current-object-label BorderLayout/EAST)
-      (.setBorder scroll-pane (rounded-border border-color))
-      (.setBackground (.getViewport scroll-pane) surface)
-      (.add results-panel scroll-pane BorderLayout/CENTER)
+      (.setRows results 22)
+      (.setColumns results 60)
+      (.setBorder results-scroll-pane (rounded-border border-color))
+      (.setBackground (.getViewport results-scroll-pane) surface)
+      (.setPreferredSize results-panel (Dimension. 650 470))
+      (.setMinimumSize results-panel (Dimension. 400 360))
+      (.add results-panel results-scroll-pane BorderLayout/CENTER)
       (.setOpaque btn-panel false)
       (.setBorder btn-panel (BorderFactory/createEmptyBorder 4 0 0 0))
       (.add main-panel form BorderLayout/NORTH)
@@ -327,13 +381,18 @@
       (.add btn-panel calc-btn)
       (.add btn-panel save-btn)
       (.add main-panel btn-panel BorderLayout/SOUTH)
-      (.add frame main-panel))
+      (.setBorder app-scroll-pane nil)
+      (.setHorizontalScrollBarPolicy
+       app-scroll-pane JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
+      (.setUnitIncrement (.getVerticalScrollBar app-scroll-pane) 20)
+      (.setBackground (.getViewport app-scroll-pane) background)
+      (.add frame app-scroll-pane))
 
     (.setVisible frame true)
 
     {:frame frame :results results :calc-btn calc-btn :save-btn save-btn
      :new-object-item new-object-item :objects-menu objects-menu
-     :address-f address-f :comment-f comment-f
+    :name-f name-f :address-f address-f :comment-f comment-f
      :listing-url-f listing-url-f :listing-link listing-link
      :current-object-label current-object-label
      :rate-slider rate-slider :rate-label rate-label :p-price-f p-price-f

@@ -1,6 +1,7 @@
 (ns storage
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:import [java.io PushbackReader]
            [java.nio.file AtomicMoveNotSupportedException CopyOption Files
             StandardCopyOption]))
@@ -63,10 +64,13 @@
 
 (defn save-object! [object]
   (let [objects (load-objects)
+        name (str/trim (or (:name object) ""))
         address (:address object)
-        matching-address? #(= address (:address %))
-        updated-objects (if (some matching-address? objects)
-                          (mapv #(if (matching-address? %) object %) objects)
+        matching-object? #(if (str/blank? name)
+                            (= address (:address %))
+                            (= name (str/trim (or (:name %) ""))))
+        updated-objects (if (some matching-object? objects)
+                          (mapv #(if (matching-object? %) object %) objects)
                           (conj objects object))]
     (write-objects! updated-objects)
     updated-objects))

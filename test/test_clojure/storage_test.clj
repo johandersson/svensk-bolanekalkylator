@@ -21,7 +21,7 @@
   (with-temp-storage
     (fn []
       (let [legacy-object {:address "Gamla vägen 1"}
-            new-object {:address "Nya vägen 2"}]
+        new-object {:name "Nytt objekt" :address "Nya vägen 2"}]
         (spit store/legacy-settings-file (pr-str legacy-object))
         (is (= [legacy-object] (store/load-objects)))
 
@@ -35,7 +35,8 @@
 (deftest round-trips-complete-objects
   (with-temp-storage
     (fn []
-      (let [first-object {:address "Första vägen 1"
+      (let [first-object {:name "Första objektet"
+              :address "Första vägen 1"
                           :comment "Nära stationen"
                           :listing-url "https://example.se/objekt/1"
                           :purchase-price "3231000"
@@ -45,7 +46,8 @@
                           :calculation {:loan 2731000.0
                                         :monthly-payment-after-tax 14567.89}
                           :result-text "Rad 1\nRad 2\n"}
-            second-object {:address "Andra vägen 2"
+            second-object {:name "Andra objektet"
+                           :address "Andra vägen 2"
                            :comment "Balkong"
                            :listing-url "https://example.se/objekt/2"
                            :purchase-price "4100000"
@@ -64,7 +66,7 @@
         (let [updated (assoc first-object :comment "Uppdaterad kommentar")]
           (store/save-object! updated)
 
-          (testing "saving an existing address updates only that object"
+          (testing "saving an existing name updates only that object"
             (is (= [updated second-object]
                    (store/load-objects)))))))))
 
