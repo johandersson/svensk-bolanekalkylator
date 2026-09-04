@@ -4,7 +4,7 @@
             Font Graphics2D GridLayout Insets Point Rectangle RenderingHints]
            [java.awt.event InputEvent KeyEvent]
            [java.net URI]
-           [javax.swing AbstractAction BorderFactory JButton JCheckBox JComponent
+           [javax.swing AbstractAction BorderFactory JButton JCheckBox JComboBox JComponent
             JDialog JFrame JLabel JPanel JEditorPane JList JMenu JMenuBar
             JOptionPane JScrollPane JTextArea JTextField SwingConstants JSlider
             JMenuItem KeyStroke UIManager JWindow ListSelectionModel Scrollable
@@ -502,7 +502,7 @@
         results (JTextArea.)
         calc-btn (rounded-button "Beräkna bolån" blue blue-hover)
         maximum-cost-btn (rounded-button "Ange maximal totalkostnad"
-                 blue blue-hover)
+                                         blue blue-hover)
         save-btn (rounded-button "Spara objekt" green green-hover)
         delete-btn (rounded-button "Radera" red red-hover)
         menu-bar (JMenuBar.)
@@ -525,8 +525,9 @@
         fee-f (JTextField.)
         op-cost-f (JTextField.)
         income-f (JTextField.)
-        t-low-f (JTextField.)
-        t-high-f (JTextField.)
+        t-low-f (JTextField. "30")
+        t-high-f (JTextField. "21")
+        borrower-count-cb (JComboBox. (into-array Integer [1 2]))
         extra-amort-cb (JCheckBox. "Räkna med extra amortering vid hög skuldkvot")]
 
     (.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
@@ -544,8 +545,10 @@
     (.setBorder menu-bar (BorderFactory/createMatteBorder 0 0 1 0 border-color))
     (.setEnabled delete-btn false)
     (doseq [field [name-f address-f comment-f listing-url-f p-price-f d-pay-f
-             fee-f op-cost-f income-f t-low-f t-high-f]]
+                   fee-f op-cost-f income-f t-low-f t-high-f]]
       (style-field! field))
+    (.setEditable t-low-f false)
+    (.setEditable t-high-f false)
     (.setFont extra-amort-cb (Font. ui-font Font/PLAIN 13))
     (.setForeground extra-amort-cb text-primary)
     (.setOpaque extra-amort-cb false)
@@ -596,6 +599,7 @@
     (add-row! form "Månadsavgift (kr):" fee-f)
     (add-row! form "Driftskostnad per månad (kr):" op-cost-f)
     (add-row! form "Hushållets bruttoinkomst per år (kr):" income-f)
+    (add-row! form "Antal låntagare:" borrower-count-cb)
     (add-row! form "Skattereduktion upp till 100 000 kr (%):" t-low-f)
     (add-row! form "Skattereduktion över 100 000 kr (%):" t-high-f)
     (.add form extra-amort-cb)
@@ -654,13 +658,14 @@
     (.setVisible frame true)
 
     {:frame frame :results results :calc-btn calc-btn
-      :maximum-cost-btn maximum-cost-btn :save-btn save-btn
-      :delete-btn delete-btn
-      :new-object-item new-object-item :objects-menu objects-menu
-      :about-item about-item
-    :name-f name-f :address-f address-f :comment-f comment-f
+     :maximum-cost-btn maximum-cost-btn :save-btn save-btn
+     :delete-btn delete-btn
+     :new-object-item new-object-item :objects-menu objects-menu
+     :about-item about-item
+     :name-f name-f :address-f address-f :comment-f comment-f
      :listing-url-f listing-url-f :listing-link listing-link
      :current-object-label current-object-label
      :rate-slider rate-slider :rate-label rate-label :p-price-f p-price-f
      :d-pay-f d-pay-f :fee-f fee-f :op-cost-f op-cost-f :income-f income-f
-     :t-low-f t-low-f :t-high-f t-high-f :extra-amort-cb extra-amort-cb}))
+     :t-low-f t-low-f :t-high-f t-high-f :borrower-count-cb borrower-count-cb
+     :extra-amort-cb extra-amort-cb}))

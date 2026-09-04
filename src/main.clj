@@ -35,7 +35,8 @@
    t-low-f
    t-high-f
    rate-slider
-   extra-amort-cb]
+   extra-amort-cb
+   borrower-count-cb]
 
   (try
     (let [p-price  (parse-number p-price-f)
@@ -55,7 +56,8 @@
                     inc
                     t-low
                     t-high
-                    (.isSelected extra-amort-cb))]
+                    (.isSelected extra-amort-cb)
+                    (int (.getSelectedItem borrower-count-cb)))]
 
       (.setText
        res
@@ -100,7 +102,7 @@
          (:monthly-interest-cost data))
         " kr\n"
 
-        "Skattereduktion per månad:  "
+        "Beräknad skattereduktion:    "
         (calc/money
          (:monthly-tax-reduction data))
         " kr\n"
@@ -126,7 +128,11 @@
         "Total efter skattereduktion: "
         (calc/money
          (:monthly-payment-after-tax data))
-        " kr/mån\n"))
+        " kr/mån\n\n"
+
+        "Prognosen antar ett bolån med bostaden som säkerhet,\n"
+        (int (.getSelectedItem borrower-count-cb))
+        " låntagare med jämn räntefördelning och tillräcklig skatt.\n"))
       data)
 
     (catch Exception e
@@ -144,9 +150,7 @@
    [:d-pay-f :down-payment]
    [:fee-f :monthly-fee]
    [:op-cost-f :monthly-operating-cost]
-   [:income-f :annual-income]
-   [:t-low-f :tax-low-percent]
-   [:t-high-f :tax-high-percent]])
+   [:income-f :annual-income]])
 
 (defn calculate-ui! [ui]
   (calculate-and-display!
@@ -159,7 +163,8 @@
    (:t-low-f ui)
    (:t-high-f ui)
    (:rate-slider ui)
-   (:extra-amort-cb ui)))
+   (:extra-amort-cb ui)
+   (:borrower-count-cb ui)))
 
 (defn apply-maximum-cost! [ui]
   (when-let [input (gui/ask-maximum-cost! (:frame ui))]
@@ -179,7 +184,8 @@
                     (parse-number (:income-f ui))
                     (parse-number (:t-low-f ui))
                     (parse-number (:t-high-f ui))
-                    (.isSelected (:extra-amort-cb ui)))]
+                    (.isSelected (:extra-amort-cb ui))
+                    (int (.getSelectedItem (:borrower-count-cb ui))))]
             (do
               (.setText (:p-price-f ui) (format "%.0f" purchase-price))
               (calculate-ui! ui))
@@ -205,10 +211,11 @@
     (.setSelected (:extra-amort-cb ui)
                   (boolean (:extra-amortization? object))))
 
+  (.setSelectedItem (:borrower-count-cb ui)
+                    (Integer/valueOf (int (get object :borrower-count 1))))
+
   (update-rate-label! (:rate-label ui) (:rate-slider ui))
-  (if-let [result-text (:result-text object)]
-    (.setText (:results ui) result-text)
-    (calculate-ui! ui)))
+  (calculate-ui! ui))
 
 (defn editable-state [ui]
   (merge
@@ -217,6 +224,7 @@
                 [object-key (.getText (get ui field-key))])
               field-keys))
    {:interest-slider-value (.getValue (:rate-slider ui))
+    :borrower-count (int (.getSelectedItem (:borrower-count-cb ui)))
     :extra-amortization? (.isSelected (:extra-amort-cb ui))}))
 
 (defn object-from-ui [ui calculation]
@@ -363,6 +371,12 @@
              (calculate-ui! ui)))))
 
       (.addActionListener
+       (:borrower-count-cb ui)
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (calculate-ui! ui))))
+
+      (.addActionListener
        new-object-item
        (reify java.awt.event.ActionListener
          (actionPerformed [_ _]
@@ -386,7 +400,7 @@
          (actionPerformed [_ _]
            (delete-current!)))))))
 
-(defn -main [& args]
+(defn -main [& _args]
   (SwingUtilities/invokeLater
    (reify java.lang.Runnable
      (run [_]
