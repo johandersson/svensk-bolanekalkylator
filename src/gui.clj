@@ -168,6 +168,63 @@
     (.setLocationRelativeTo dialog frame)
     (.setVisible dialog true)))
 
+(defn show-about! [frame]
+  (let [dialog (JDialog. frame "Om Bolånekalkylator" true)
+        root (JPanel. (BorderLayout. 0 20))
+        heading (JPanel. (GridLayout. 0 1 0 4))
+        title (JLabel. "Bolånekalkylator")
+        subtitle (JLabel. "Ett enklare beslutsunderlag för ditt nästa boende")
+        content (shadow-panel (GridLayout. 0 1 0 10))
+        description (JLabel. (str "<html><div style='width:420px'>"
+                                  "Beräkna månadskostnad, ränta och amortering "
+                                  "för svenska bolån. Spara flera objekt med "
+                                  "adress, kommentar och länk till annonsen."
+                                  "</div></html>"))
+        license-title (JLabel. "Fri programvara")
+        license-text (JLabel. (str "<html><div style='width:420px'>"
+                                   "Programmet distribueras under GNU General "
+                                   "Public License version 3 (GPLv3)."
+                                   "<br><br>Copyright © 2026 Johan Andersson"
+                                   "</div></html>"))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 0 0))
+        close-btn (rounded-button "Stäng" blue blue-hover)]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 28 28 24 28))
+    (.setOpaque heading false)
+    (.setFont title (Font. ui-font Font/BOLD 28))
+    (.setForeground title text-primary)
+    (.setFont subtitle (Font. ui-font Font/PLAIN 14))
+    (.setForeground subtitle text-secondary)
+    (.add heading title)
+    (.add heading subtitle)
+    (.setFont description (Font. ui-font Font/PLAIN 14))
+    (.setForeground description text-primary)
+    (.setFont license-title (Font. ui-font Font/BOLD 16))
+    (.setForeground license-title green)
+    (.setFont license-text (Font. ui-font Font/PLAIN 13))
+    (.setForeground license-text text-secondary)
+    (.add content description)
+    (.add content license-title)
+    (.add content license-text)
+    (.setOpaque actions false)
+    (.setPreferredSize close-btn (Dimension. 110 42))
+    (.add actions close-btn)
+    (.addActionListener
+     close-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose dialog))))
+    (.add root heading BorderLayout/NORTH)
+    (.add root content BorderLayout/CENTER)
+    (.add root actions BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.setDefaultButton (.getRootPane dialog) close-btn)
+    (.pack dialog)
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    (.setVisible dialog true)))
+
 (defn choose-object! [frame labels]
   (let [selected-index (atom nil)
         dialog (JDialog. frame "Öppna objekt" true)
@@ -257,6 +314,8 @@
         file-menu (JMenu. "File")
         new-object-item (JMenuItem. "Nytt objekt")
         objects-menu (JMenu. "Objekt")
+        help-menu (JMenu. "Hjälp")
+        about-item (JMenuItem. "Om Bolånekalkylator")
         rate-slider (JSlider. 0 200 0)
         rate-label (JLabel. "")
         name-f (JTextField.)
@@ -283,6 +342,8 @@
     (.addSeparator file-menu)
     (.add file-menu objects-menu)
     (.add menu-bar file-menu)
+    (.add help-menu about-item)
+    (.add menu-bar help-menu)
     (.setJMenuBar frame menu-bar)
     (.setBackground menu-bar surface)
     (.setBorder menu-bar (BorderFactory/createMatteBorder 0 0 1 0 border-color))
@@ -391,7 +452,8 @@
     (.setVisible frame true)
 
     {:frame frame :results results :calc-btn calc-btn :save-btn save-btn
-     :new-object-item new-object-item :objects-menu objects-menu
+      :new-object-item new-object-item :objects-menu objects-menu
+      :about-item about-item
     :name-f name-f :address-f address-f :comment-f comment-f
      :listing-url-f listing-url-f :listing-link listing-link
      :current-object-label current-object-label

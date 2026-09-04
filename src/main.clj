@@ -227,6 +227,7 @@
         calc-btn        (:calc-btn ui)
         save-btn        (:save-btn ui)
         new-object-item (:new-object-item ui)
+        about-item      (:about-item ui)
         rate-slider     (:rate-slider ui)
         rate-label      (:rate-label ui)
         objects-menu     (:objects-menu ui)
@@ -306,6 +307,12 @@
        (reify java.awt.event.ActionListener
          (actionPerformed [_ _]
            (create-new-object!))))
+
+      (.addActionListener
+       about-item
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (gui/show-about! (:frame ui)))))
 
       (.addActionListener
        save-btn
