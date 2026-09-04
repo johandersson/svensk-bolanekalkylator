@@ -2,11 +2,13 @@
   (:require [clojure.string :as str])
   (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
             Font Graphics2D GridLayout Insets Point Rectangle RenderingHints]
+           [java.awt.event InputEvent KeyEvent]
            [java.net URI]
-           [javax.swing BorderFactory JButton JCheckBox JDialog JFrame JLabel
-            JPanel JEditorPane JList JMenu JMenuBar JOptionPane JScrollPane
-            JTextArea JTextField SwingConstants JSlider JMenuItem UIManager
-            JWindow ListSelectionModel Scrollable Timer WindowConstants]
+           [javax.swing AbstractAction BorderFactory JButton JCheckBox JComponent
+            JDialog JFrame JLabel JPanel JEditorPane JList JMenu JMenuBar
+            JOptionPane JScrollPane JTextArea JTextField SwingConstants JSlider
+            JMenuItem KeyStroke UIManager JWindow ListSelectionModel Scrollable
+            Timer WindowConstants]
            [javax.swing.border AbstractBorder]
            [javax.swing.event HyperlinkEvent$EventType]))
 
@@ -137,6 +139,20 @@
   (.setText (:current-object-label ui) (str "Öppet objekt: " object-name))
   (.setTitle (:frame ui)
              (str object-name " · Svensk bolånekalkylator")))
+
+(defn bind-save-shortcut! [frame save!]
+  (let [root-pane (.getRootPane frame)
+        input-map (.getInputMap root-pane JComponent/WHEN_IN_FOCUSED_WINDOW)
+        action-map (.getActionMap root-pane)
+        action-key "save-object"]
+    (.put input-map
+          (KeyStroke/getKeyStroke KeyEvent/VK_S InputEvent/CTRL_DOWN_MASK)
+          action-key)
+    (.put action-map
+          action-key
+          (proxy [AbstractAction] []
+            (actionPerformed [_]
+              (save!))))))
 
 (defn show-toast! [frame message]
   (let [toast (JWindow. frame)

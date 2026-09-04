@@ -329,6 +329,7 @@
                       (activate-object! new-object "Nytt objekt" nil)
                       (gui/show-toast! (:frame ui) "Raderat!"))))))]
       (refresh-objects-menu! objects-menu objects switch-object!)
+      (gui/bind-save-shortcut! (:frame ui) save-current!)
 
       (cond
         (= 1 (count objects)) (activate-object! (first objects)
