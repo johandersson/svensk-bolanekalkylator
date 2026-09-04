@@ -201,30 +201,23 @@
       (.setEnabled empty-item false)
       (.add objects-menu empty-item))
     (doseq [[index object] (map-indexed vector objects)]
-      (let [item (JMenuItem. (object-label index object))]
+      (let [label (object-label index object)
+            item (JMenuItem. label)]
         (.addActionListener
          item
          (reify java.awt.event.ActionListener
            (actionPerformed [_ _]
-             (load-object! object))))
+             (load-object! object label))))
         (.add objects-menu item))))
   (.revalidate objects-menu)
   (.repaint objects-menu))
 
 (defn choose-startup-object [frame objects]
   (let [labels (mapv object-label (range) objects)
-        selected-index
-        (JOptionPane/showOptionDialog
-         frame
-         "Välj vilket objekt som ska öppnas."
-         "Öppna objekt"
-         JOptionPane/DEFAULT_OPTION
-         JOptionPane/QUESTION_MESSAGE
-         nil
-         (to-array labels)
-         (first labels))]
-    (when (<= 0 selected-index)
-      (nth objects selected-index))))
+        selected-index (gui/choose-object! frame labels)]
+    (when (some? selected-index)
+      [(nth objects selected-index)
+       (nth labels selected-index)])))
 
 (defn init-app []
   (let [ui              (gui/create-ui)
@@ -237,8 +230,9 @@
         new-object      (editable-state ui)
         saved-state     (atom new-object)
         objects         (store/load-objects)]
-    (letfn [(activate-object! [object]
+    (letfn [(activate-object! [object label]
               (restore-object! ui (merge new-object object))
+              (gui/show-current-object! ui label)
               (reset! saved-state (editable-state ui)))
             (save-current! []
               (when-let [calculation (calculate-ui! ui)]
@@ -255,6 +249,7 @@
                                         :address address)
                           saved-objects (store/save-object! object)]
                       (gui/show-link! (:listing-link ui) (:listing-url object))
+                      (gui/show-current-object! ui address)
                       (reset! saved-state (editable-state ui))
                       (refresh-objects-menu!
                        objects-menu saved-objects switch-object!)
@@ -271,19 +266,21 @@
                   0 (boolean (save-current!))
                   1 true
                   false)))
-            (switch-object! [object]
+            (switch-object! [object label]
               (when (may-leave-current?)
-                (activate-object! object)))
+                (activate-object! object label)))
             (create-new-object! []
               (when (may-leave-current?)
-                (activate-object! new-object)))]
+                (activate-object! new-object "Nytt objekt")))]
       (refresh-objects-menu! objects-menu objects switch-object!)
 
       (cond
-        (= 1 (count objects)) (activate-object! (first objects))
-        (< 1 (count objects)) (when-let [object (choose-startup-object
-                                                 (:frame ui) objects)]
-                                (activate-object! object)))
+        (= 1 (count objects)) (activate-object! (first objects)
+                                                (object-label 0 (first objects)))
+        (< 1 (count objects)) (when-let [[object label]
+                                         (choose-startup-object
+                                          (:frame ui) objects)]
+                                (activate-object! object label)))
 
       (update-rate-label! rate-label rate-slider)
 

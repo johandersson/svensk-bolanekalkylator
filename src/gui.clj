@@ -1,11 +1,12 @@
 (ns gui
   (:require [clojure.string :as str])
-  (:import [java.awt BorderLayout Color Cursor Desktop Dimension Font
-            Graphics2D GridLayout Insets RenderingHints]
+  (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
+            Font Graphics2D GridLayout Insets RenderingHints]
            [java.net URI]
-           [javax.swing BorderFactory JButton JCheckBox JFrame JLabel JPanel
-            JEditorPane JMenu JMenuBar JOptionPane JScrollPane JTextArea
-            JTextField SwingConstants JSlider JMenuItem UIManager]
+           [javax.swing BorderFactory JButton JCheckBox JDialog JFrame JLabel
+            JPanel JEditorPane JList JMenu JMenuBar JOptionPane JScrollPane
+            JTextArea JTextField SwingConstants JSlider JMenuItem UIManager
+            ListSelectionModel WindowConstants]
            [javax.swing.border AbstractBorder]
            [javax.swing.event HyperlinkEvent$EventType]))
 
@@ -116,6 +117,87 @@
         (catch Exception _
           (.setText link-pane "Ogiltig webbadress"))))))
 
+(defn show-current-object! [ui object-name]
+  (.setText (:current-object-label ui) (str "Öppet objekt: " object-name))
+  (.setTitle (:frame ui)
+             (str object-name " · Svensk bolånekalkylator")))
+
+(defn choose-object! [frame labels]
+  (let [selected-index (atom nil)
+        dialog (JDialog. frame "Öppna objekt" true)
+        root (JPanel. (BorderLayout. 0 18))
+        heading (JPanel. (GridLayout. 0 1 0 4))
+        title (JLabel. "Välj objekt")
+        subtitle (JLabel. "Markera ett sparat objekt att öppna")
+        object-list (JList. (into-array String labels))
+        scroll-pane (JScrollPane. object-list)
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 10 0))
+        cancel-btn (rounded-button "Avbryt" (Color. 100 116 139)
+                                   (Color. 71 85 105))
+        open-btn (rounded-button "Öppna objekt" blue blue-hover)
+        open-selected! (fn []
+                         (when (<= 0 (.getSelectedIndex object-list))
+                           (reset! selected-index (.getSelectedIndex object-list))
+                           (.dispose dialog)))]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 24 24 22 24))
+    (.setOpaque heading false)
+    (.setFont title (Font. ui-font Font/BOLD 24))
+    (.setForeground title text-primary)
+    (.setFont subtitle (Font. ui-font Font/PLAIN 14))
+    (.setForeground subtitle text-secondary)
+    (.add heading title)
+    (.add heading subtitle)
+
+    (.setSelectionMode object-list ListSelectionModel/SINGLE_SELECTION)
+    (.setSelectedIndex object-list 0)
+    (.setVisibleRowCount object-list 7)
+    (.setFixedCellHeight object-list 42)
+    (.setFont object-list (Font. ui-font Font/PLAIN 15))
+    (.setForeground object-list text-primary)
+    (.setBackground object-list surface)
+    (.setSelectionBackground object-list (Color. 219 234 254))
+    (.setSelectionForeground object-list (Color. 30 64 175))
+    (.setBorder object-list (BorderFactory/createEmptyBorder 6 10 6 10))
+    (.setBorder scroll-pane (rounded-border border-color))
+    (.setPreferredSize scroll-pane (Dimension. 440 300))
+    (.setBackground (.getViewport scroll-pane) surface)
+
+    (.setOpaque actions false)
+    (.setPreferredSize cancel-btn (Dimension. 110 42))
+    (.setPreferredSize open-btn (Dimension. 150 42))
+    (.add actions cancel-btn)
+    (.add actions open-btn)
+    (.addActionListener
+     cancel-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose dialog))))
+    (.addActionListener
+     open-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (open-selected!))))
+    (.addMouseListener
+     object-list
+     (proxy [java.awt.event.MouseAdapter] []
+       (mouseClicked [event]
+         (when (= 2 (.getClickCount event))
+           (open-selected!)))))
+
+    (.add root heading BorderLayout/NORTH)
+    (.add root scroll-pane BorderLayout/CENTER)
+    (.add root actions BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.getRootPane dialog)
+    (.setDefaultButton (.getRootPane dialog) open-btn)
+    (.pack dialog)
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    (.setVisible dialog true)
+    @selected-index))
+
 (defn create-ui []
   (doseq [key ["Label.font" "Menu.font" "MenuItem.font" "OptionPane.font"
                "CheckBox.font"]]
@@ -135,6 +217,8 @@
         comment-f (JTextField.)
         listing-url-f (JTextField.)
         listing-link (JEditorPane.)
+        current-object-label (JLabel. "Öppet objekt: Nytt objekt"
+                                      SwingConstants/CENTER)
         p-price-f (JTextField.)
         d-pay-f (JTextField.)
         fee-f (JTextField.)
@@ -174,6 +258,12 @@
     (.setEditable listing-link false)
     (.setOpaque listing-link false)
     (.setFont listing-link (Font. ui-font Font/PLAIN 13))
+    (.setFont current-object-label (Font. ui-font Font/BOLD 13))
+    (.setForeground current-object-label blue)
+    (.setBorder current-object-label
+                (BorderFactory/createCompoundBorder
+                 (rounded-border (Color. 191 219 254))
+                 (BorderFactory/createEmptyBorder 4 10 4 10)))
     (.addHyperlinkListener
      listing-link
      (reify javax.swing.event.HyperlinkListener
@@ -208,6 +298,7 @@
 
     (let [main-panel (JPanel. (BorderLayout. 0 16))
           header (JPanel. (BorderLayout.))
+          heading (JPanel. (GridLayout. 0 1 0 2))
           title (JLabel. "Bolånekalkyl")
           subtitle (JLabel. "Jämför boendekostnaden och spara intressanta objekt")
           scroll-pane (JScrollPane. results)
@@ -216,12 +307,15 @@
       (.setBackground main-panel background)
       (.setBorder main-panel (BorderFactory/createEmptyBorder 20 24 20 24))
       (.setOpaque header false)
+      (.setOpaque heading false)
       (.setFont title (Font. ui-font Font/BOLD 26))
       (.setForeground title text-primary)
       (.setFont subtitle (Font. ui-font Font/PLAIN 14))
       (.setForeground subtitle text-secondary)
-      (.add header title BorderLayout/NORTH)
-      (.add header subtitle BorderLayout/SOUTH)
+      (.add heading title)
+      (.add heading subtitle)
+      (.add header heading BorderLayout/CENTER)
+      (.add header current-object-label BorderLayout/EAST)
       (.setBorder scroll-pane (rounded-border border-color))
       (.setBackground (.getViewport scroll-pane) surface)
       (.add results-panel scroll-pane BorderLayout/CENTER)
@@ -241,6 +335,7 @@
      :new-object-item new-object-item :objects-menu objects-menu
      :address-f address-f :comment-f comment-f
      :listing-url-f listing-url-f :listing-link listing-link
+     :current-object-label current-object-label
      :rate-slider rate-slider :rate-label rate-label :p-price-f p-price-f
      :d-pay-f d-pay-f :fee-f fee-f :op-cost-f op-cost-f :income-f income-f
      :t-low-f t-low-f :t-high-f t-high-f :extra-amort-cb extra-amort-cb}))
