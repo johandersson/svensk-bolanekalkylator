@@ -148,7 +148,11 @@
                     (.fillRoundRect graphics-2d 4 5
                                     (- (.getWidth this) 8)
                                     (- (.getHeight this) 9) 16 16)
-                    (.setColor graphics-2d green)
+                    (.setColor graphics-2d
+                               (Color. (.getRed green)
+                                       (.getGreen green)
+                                       (.getBlue green)
+                                       210))
                     (.fillRoundRect graphics-2d 0 0
                                     (- (.getWidth this) 8)
                                     (- (.getHeight this) 9) 16 16)
@@ -166,10 +170,10 @@
     (.setBackground toast (Color. 0 0 0 0))
     (.pack toast)
     (let [frame-location (.getLocationOnScreen frame)
-          x (- (+ (.x ^Point frame-location) (.getWidth frame))
-               (.getWidth toast) 24)
-          y (- (+ (.y ^Point frame-location) (.getHeight frame))
-               (.getHeight toast) 48)]
+          x (+ (.x ^Point frame-location)
+               (quot (- (.getWidth frame) (.getWidth toast)) 2))
+          y (+ (.y ^Point frame-location)
+               (quot (- (.getHeight frame) (.getHeight toast)) 2))]
       (.setLocation toast x y))
     (.addActionListener
      timer
