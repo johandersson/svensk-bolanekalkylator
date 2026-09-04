@@ -10,6 +10,9 @@
   (Double/parseDouble
    (str/replace (.getText field) "," ".")))
 
+(defn parse-number-text [value]
+  (Double/parseDouble (str/replace value "," ".")))
+
 (defn restore-field! [field settings key]
   (.setText field (str (get settings key ""))))
 
@@ -158,6 +161,38 @@
    (:rate-slider ui)
    (:extra-amort-cb ui)))
 
+(defn apply-maximum-cost! [ui]
+  (when-let [input (gui/ask-maximum-cost! (:frame ui))]
+    (try
+      (let [maximum-cost (parse-number-text input)]
+        (if-not (pos? maximum-cost)
+          (gui/show-error! (:frame ui)
+                           "Ogiltig månadsgräns"
+                           "Ange ett belopp som är större än noll.")
+          (if-let [purchase-price
+                   (calc/maximum-purchase-price
+                    maximum-cost
+                    (parse-number (:d-pay-f ui))
+                    (slider-interest (:rate-slider ui))
+                    (parse-number (:fee-f ui))
+                    (parse-number (:op-cost-f ui))
+                    (parse-number (:income-f ui))
+                    (parse-number (:t-low-f ui))
+                    (parse-number (:t-high-f ui))
+                    (.isSelected (:extra-amort-cb ui)))]
+            (do
+              (.setText (:p-price-f ui) (format "%.0f" purchase-price))
+              (calculate-ui! ui))
+            (gui/show-error!
+             (:frame ui)
+             "Månadsgränsen är för låg"
+             "Gränsen täcker inte månadsavgiften och driftskostnaden."))))
+      (catch Exception _
+        (gui/show-error!
+         (:frame ui)
+         "Kontrollera uppgifterna"
+         "Ange giltiga belopp i månadsgränsen och kalkylens obligatoriska fält.")))))
+
 (defn restore-object! [ui object]
   (doseq [[field-key object-key] field-keys]
     (restore-field! (get ui field-key) object object-key))
@@ -225,6 +260,7 @@
 (defn init-app []
   (let [ui              (gui/create-ui)
         calc-btn        (:calc-btn ui)
+        maximum-cost-btn (:maximum-cost-btn ui)
         save-btn        (:save-btn ui)
         new-object-item (:new-object-item ui)
         about-item      (:about-item ui)
@@ -293,6 +329,12 @@
        (reify java.awt.event.ActionListener
          (actionPerformed [_ _]
            (calculate-ui! ui))))
+
+      (.addActionListener
+       maximum-cost-btn
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (apply-maximum-cost! ui))))
 
       (.addChangeListener
        rate-slider

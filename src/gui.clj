@@ -225,6 +225,73 @@
     (.setLocationRelativeTo dialog frame)
     (.setVisible dialog true)))
 
+(defn ask-maximum-cost! [frame]
+  (let [value (atom nil)
+        dialog (JDialog. frame "Maximal totalkostnad" true)
+        root (JPanel. (BorderLayout. 0 18))
+        heading (JPanel. (GridLayout. 0 1 0 4))
+        title (JLabel. "Ange din månadsgräns")
+        subtitle (JLabel. "Köpeskillingen anpassas efter din budget")
+        input-panel (shadow-panel (GridLayout. 0 1 0 8))
+        input-label (JLabel. "Maximal totalkostnad efter skattereduktion (kr/mån)")
+        cost-field (JTextField.)
+        hint (JLabel. (str "<html><div style='width:430px'>"
+                           "Kontantinsats, månadsavgift och driftskostnad "
+                           "behålls oförändrade."
+                           "</div></html>"))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 10 0))
+        cancel-btn (rounded-button "Avbryt" (Color. 100 116 139)
+                                   (Color. 71 85 105))
+        apply-btn (rounded-button "Beräkna" blue blue-hover)
+        apply-value! (fn []
+                       (reset! value (str/trim (.getText cost-field)))
+                       (.dispose dialog))]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 28 28 24 28))
+    (.setOpaque heading false)
+    (.setFont title (Font. ui-font Font/BOLD 24))
+    (.setForeground title text-primary)
+    (.setFont subtitle (Font. ui-font Font/PLAIN 14))
+    (.setForeground subtitle text-secondary)
+    (.add heading title)
+    (.add heading subtitle)
+    (.setFont input-label (Font. ui-font Font/BOLD 13))
+    (.setForeground input-label text-primary)
+    (style-field! cost-field)
+    (.setPreferredSize cost-field (Dimension. 430 42))
+    (.setFont hint (Font. ui-font Font/PLAIN 13))
+    (.setForeground hint text-secondary)
+    (.add input-panel input-label)
+    (.add input-panel cost-field)
+    (.add input-panel hint)
+    (.setOpaque actions false)
+    (.setPreferredSize cancel-btn (Dimension. 110 42))
+    (.setPreferredSize apply-btn (Dimension. 120 42))
+    (.add actions cancel-btn)
+    (.add actions apply-btn)
+    (.addActionListener
+     cancel-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose dialog))))
+    (.addActionListener
+     apply-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (apply-value!))))
+    (.add root heading BorderLayout/NORTH)
+    (.add root input-panel BorderLayout/CENTER)
+    (.add root actions BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.setDefaultButton (.getRootPane dialog) apply-btn)
+    (.pack dialog)
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    (.requestFocusInWindow cost-field)
+    (.setVisible dialog true)
+    @value))
+
 (defn choose-object! [frame labels]
   (let [selected-index (atom nil)
         dialog (JDialog. frame "Öppna objekt" true)
@@ -309,6 +376,8 @@
         form (shadow-panel (GridLayout. 0 2 12 12))
         results (JTextArea.)
         calc-btn (rounded-button "Beräkna bolån" blue blue-hover)
+        maximum-cost-btn (rounded-button "Ange maximal totalkostnad"
+                 blue blue-hover)
         save-btn (rounded-button "Spara objekt" green green-hover)
         menu-bar (JMenuBar.)
         file-menu (JMenu. "File")
@@ -436,9 +505,11 @@
       (.add results-panel results-scroll-pane BorderLayout/CENTER)
       (.setOpaque btn-panel false)
       (.setBorder btn-panel (BorderFactory/createEmptyBorder 4 0 0 0))
+      (.setPreferredSize maximum-cost-btn (Dimension. 230 42))
       (.add main-panel form BorderLayout/NORTH)
       (.add results-panel header BorderLayout/NORTH)
       (.add main-panel results-panel BorderLayout/CENTER)
+      (.add btn-panel maximum-cost-btn)
       (.add btn-panel calc-btn)
       (.add btn-panel save-btn)
       (.add main-panel btn-panel BorderLayout/SOUTH)
@@ -451,7 +522,8 @@
 
     (.setVisible frame true)
 
-    {:frame frame :results results :calc-btn calc-btn :save-btn save-btn
+    {:frame frame :results results :calc-btn calc-btn
+     :maximum-cost-btn maximum-cost-btn :save-btn save-btn
       :new-object-item new-object-item :objects-menu objects-menu
       :about-item about-item
     :name-f name-f :address-f address-f :comment-f comment-f
