@@ -1,43 +1,196 @@
 (ns gui
-  (:import [java.awt BorderLayout Color Dimension Font GridLayout Insets]
+  (:require [clojure.string :as str])
+  (:import [java.awt BorderLayout Color Cursor Desktop Dimension Font
+            Graphics2D GridLayout Insets RenderingHints]
+           [java.net URI]
            [javax.swing BorderFactory JButton JCheckBox JFrame JLabel JPanel
-            JScrollPane JTextArea JTextField SwingConstants JSlider]))
+            JEditorPane JMenu JMenuBar JOptionPane JScrollPane JTextArea
+            JTextField SwingConstants JSlider JMenuItem UIManager]
+           [javax.swing.border AbstractBorder]
+           [javax.swing.event HyperlinkEvent$EventType]))
+
+(def background (Color. 246 248 252))
+(def surface Color/WHITE)
+(def text-primary (Color. 24 34 48))
+(def text-secondary (Color. 91 103 120))
+(def border-color (Color. 218 225 234))
+(def blue (Color. 37 99 235))
+(def blue-hover (Color. 29 78 216))
+(def green (Color. 5 150 105))
+(def green-hover (Color. 4 120 87))
+(def ui-font "Segoe UI")
+
+(defn- enable-antialiasing! [graphics]
+  (.setRenderingHint graphics RenderingHints/KEY_ANTIALIASING
+                     RenderingHints/VALUE_ANTIALIAS_ON))
+
+(defn- rounded-border [color]
+  (proxy [AbstractBorder] []
+    (paintBorder [_ graphics x y width height]
+      (let [graphics-2d (.create ^Graphics2D graphics)]
+        (enable-antialiasing! graphics-2d)
+        (.setColor graphics-2d color)
+        (.drawRoundRect graphics-2d x y (dec width) (dec height) 12 12)
+        (.dispose graphics-2d)))
+    (getBorderInsets [_]
+      (Insets. 9 12 9 12))))
+
+(defn- shadow-panel [layout]
+  (doto
+   (proxy [JPanel] [layout]
+     (paintComponent [graphics]
+       (let [graphics-2d (.create ^Graphics2D graphics)
+             width (.getWidth this)
+             height (.getHeight this)]
+         (enable-antialiasing! graphics-2d)
+         (.setColor graphics-2d (Color. 15 23 42 22))
+         (.fillRoundRect graphics-2d 4 6 (- width 8) (- height 10) 18 18)
+         (.setColor graphics-2d surface)
+         (.fillRoundRect graphics-2d 0 0 (- width 8) (- height 10) 18 18)
+         (.dispose graphics-2d))))
+    (.setOpaque false)
+    (.setBorder (BorderFactory/createEmptyBorder 18 18 22 22))))
+
+(defn- rounded-button [text color hover-color]
+  (doto
+   (proxy [JButton] [text]
+     (paintComponent [graphics]
+       (let [graphics-2d (.create ^Graphics2D graphics)
+             model (.getModel this)
+             fill-color (if (or (.isPressed model) (.isRollover model))
+                          hover-color
+                          color)]
+         (.setFont graphics-2d (.getFont this))
+         (let [metrics (.getFontMetrics graphics-2d)
+               text-x (/ (- (.getWidth this) (.stringWidth metrics text)) 2)
+               text-y (+ (/ (- (.getHeight this) (.getHeight metrics)) 2)
+                         (.getAscent metrics))]
+           (enable-antialiasing! graphics-2d)
+           (.setColor graphics-2d fill-color)
+           (.fillRoundRect graphics-2d 0 0 (.getWidth this) (.getHeight this) 14 14)
+           (.setColor graphics-2d Color/WHITE)
+           (.drawString graphics-2d text (int text-x) (int text-y)))
+         (.dispose graphics-2d))))
+    (.setFont (Font. ui-font Font/BOLD 14))
+    (.setPreferredSize (Dimension. 160 42))
+    (.setContentAreaFilled false)
+    (.setBorderPainted false)
+    (.setFocusPainted false)
+    (.setCursor (Cursor/getPredefinedCursor Cursor/HAND_CURSOR))))
+
+(defn- style-field! [field]
+  (.setFont field (Font. ui-font Font/PLAIN 14))
+  (.setForeground field text-primary)
+  (.setBackground field surface)
+  (.setBorder field (rounded-border border-color)))
 
 (defn- add-row! [panel label component]
-  (.add panel (JLabel. label SwingConstants/RIGHT))
+  (let [label-component (JLabel. label SwingConstants/LEFT)]
+    (.setFont label-component (Font. ui-font Font/PLAIN 13))
+    (.setForeground label-component text-secondary)
+    (.add panel label-component))
   (.add panel component))
 
+(defn- escape-html [value]
+  (str/escape value {\& "&amp;" \< "&lt;" \> "&gt;" \" "&quot;"}))
+
+(defn- web-uri [address]
+  (let [address (str/trim address)
+        address (if (re-find #"(?i)^https?://" address)
+                  address
+                  (str "https://" address))
+        uri (URI. address)]
+    (when (contains? #{"http" "https"} (.toLowerCase (.getScheme uri)))
+      uri)))
+
+(defn show-link! [link-pane address]
+  (let [address (str/trim (or address ""))]
+    (if (str/blank? address)
+      (.setText link-pane "")
+      (try
+        (if-let [uri (web-uri address)]
+          (.setText link-pane
+                    (str "<html><a href=\"" (escape-html (str uri)) "\">"
+                         (escape-html address) "</a></html>"))
+          (.setText link-pane "Ogiltig webbadress"))
+        (catch Exception _
+          (.setText link-pane "Ogiltig webbadress"))))))
+
 (defn create-ui []
+  (doseq [key ["Label.font" "Menu.font" "MenuItem.font" "OptionPane.font"
+               "CheckBox.font"]]
+    (UIManager/put key (Font. ui-font Font/PLAIN 14)))
   (let [frame (JFrame. "Svensk bolånekalkylator")
-        form (JPanel. (GridLayout. 0 2 8 8))
+        form (shadow-panel (GridLayout. 0 2 12 12))
         results (JTextArea.)
-        calc-btn (JButton. "Beräkna bolån")
-        save-btn (JButton. "Spara inställningar")
-        rate-slider (JSlider. 0 200 70)
-        rate-label (JLabel. "3,50 %")
-        p-price-f (JTextField. "3000000")
-        d-pay-f (JTextField. "450000")
-        fee-f (JTextField. "3500")
-        op-cost-f (JTextField. "2500")
-        income-f (JTextField. "600000")
-        t-low-f (JTextField. "30")
-        t-high-f (JTextField. "21")
+        calc-btn (rounded-button "Beräkna bolån" blue blue-hover)
+        save-btn (rounded-button "Spara objekt" green green-hover)
+        menu-bar (JMenuBar.)
+        file-menu (JMenu. "File")
+        new-object-item (JMenuItem. "Nytt objekt")
+        objects-menu (JMenu. "Objekt")
+        rate-slider (JSlider. 0 200 0)
+        rate-label (JLabel. "")
+        address-f (JTextField.)
+        comment-f (JTextField.)
+        listing-url-f (JTextField.)
+        listing-link (JEditorPane.)
+        p-price-f (JTextField.)
+        d-pay-f (JTextField.)
+        fee-f (JTextField.)
+        op-cost-f (JTextField.)
+        income-f (JTextField.)
+        t-low-f (JTextField.)
+        t-high-f (JTextField.)
         extra-amort-cb (JCheckBox. "Räkna med extra amortering vid hög skuldkvot")]
 
     (.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
-    (.setSize frame 650 760)
+    (.setSize frame 780 940)
+    (.setMinimumSize frame (Dimension. 700 820))
     (.setLocationRelativeTo frame nil)
-    (.setBackground form (Color. 245 247 250))
-    (.setBorder form (BorderFactory/createEmptyBorder 16 16 16 16))
-    (.setFont calc-btn (Font. "SansSerif" Font/BOLD 14))
-    (.setBackground calc-btn (Color. 44 115 175))
-    (.setForeground calc-btn Color/WHITE)
+    (.add file-menu new-object-item)
+    (.addSeparator file-menu)
+    (.add file-menu objects-menu)
+    (.add menu-bar file-menu)
+    (.setJMenuBar frame menu-bar)
+    (.setBackground menu-bar surface)
+    (.setBorder menu-bar (BorderFactory/createMatteBorder 0 0 1 0 border-color))
+    (doseq [field [address-f comment-f listing-url-f p-price-f d-pay-f fee-f
+                   op-cost-f income-f t-low-f t-high-f]]
+      (style-field! field))
+    (.setFont extra-amort-cb (Font. ui-font Font/PLAIN 13))
+    (.setForeground extra-amort-cb text-primary)
+    (.setOpaque extra-amort-cb false)
+    (.setOpaque rate-slider false)
+    (.setForeground rate-slider blue)
+    (.setFont rate-label (Font. ui-font Font/BOLD 13))
+    (.setForeground rate-label blue)
     (.setEditable results false)
-    (.setFont results (Font. "Monospaced" Font/PLAIN 13))
-    (.setBackground results (Color. 25 29 35))
-    (.setForeground results (Color. 220 230 220))
-    (.setMargin results (Insets. 12 12 12 12))
+    (.setFont results (Font. "Consolas" Font/PLAIN 13))
+    (.setBackground results surface)
+    (.setForeground results text-primary)
+    (.setMargin results (Insets. 16 16 16 16))
+    (.setContentType listing-link "text/html")
+    (.setEditable listing-link false)
+    (.setOpaque listing-link false)
+    (.setFont listing-link (Font. ui-font Font/PLAIN 13))
+    (.addHyperlinkListener
+     listing-link
+     (reify javax.swing.event.HyperlinkListener
+       (hyperlinkUpdate [_ event]
+         (when (= HyperlinkEvent$EventType/ACTIVATED (.getEventType event))
+           (try
+             (when (Desktop/isDesktopSupported)
+               (.browse (Desktop/getDesktop) (web-uri (.getDescription event))))
+             (catch Exception _
+               (JOptionPane/showMessageDialog
+                frame "Kunde inte öppna länken." "Länkfel"
+                JOptionPane/ERROR_MESSAGE)))))))
 
+    (add-row! form "Adress:" address-f)
+    (add-row! form "Kommentar:" comment-f)
+    (add-row! form "Annonsens webbadress:" listing-url-f)
+    (add-row! form "Sparad länk:" listing-link)
     (add-row! form "Köpeskilling (kr):" p-price-f)
     (add-row! form "Kontantinsats (kr):" d-pay-f)
     (.add form (JLabel. "Räntesats:"))
@@ -53,12 +206,30 @@
     (.add form extra-amort-cb)
     (.add form (JLabel. ""))
 
-    (let [main-panel (JPanel.)
+    (let [main-panel (JPanel. (BorderLayout. 0 16))
+          header (JPanel. (BorderLayout.))
+          title (JLabel. "Bolånekalkyl")
+          subtitle (JLabel. "Jämför boendekostnaden och spara intressanta objekt")
           scroll-pane (JScrollPane. results)
+          results-panel (shadow-panel (BorderLayout.))
           btn-panel (JPanel.)]
-      (.setLayout main-panel (BorderLayout.))
+      (.setBackground main-panel background)
+      (.setBorder main-panel (BorderFactory/createEmptyBorder 20 24 20 24))
+      (.setOpaque header false)
+      (.setFont title (Font. ui-font Font/BOLD 26))
+      (.setForeground title text-primary)
+      (.setFont subtitle (Font. ui-font Font/PLAIN 14))
+      (.setForeground subtitle text-secondary)
+      (.add header title BorderLayout/NORTH)
+      (.add header subtitle BorderLayout/SOUTH)
+      (.setBorder scroll-pane (rounded-border border-color))
+      (.setBackground (.getViewport scroll-pane) surface)
+      (.add results-panel scroll-pane BorderLayout/CENTER)
+      (.setOpaque btn-panel false)
+      (.setBorder btn-panel (BorderFactory/createEmptyBorder 4 0 0 0))
       (.add main-panel form BorderLayout/NORTH)
-      (.add main-panel scroll-pane BorderLayout/CENTER)
+      (.add results-panel header BorderLayout/NORTH)
+      (.add main-panel results-panel BorderLayout/CENTER)
       (.add btn-panel calc-btn)
       (.add btn-panel save-btn)
       (.add main-panel btn-panel BorderLayout/SOUTH)
@@ -67,6 +238,9 @@
     (.setVisible frame true)
 
     {:frame frame :results results :calc-btn calc-btn :save-btn save-btn
+     :new-object-item new-object-item :objects-menu objects-menu
+     :address-f address-f :comment-f comment-f
+     :listing-url-f listing-url-f :listing-link listing-link
      :rate-slider rate-slider :rate-label rate-label :p-price-f p-price-f
      :d-pay-f d-pay-f :fee-f fee-f :op-cost-f op-cost-f :income-f income-f
      :t-low-f t-low-f :t-high-f t-high-f :extra-amort-cb extra-amort-cb}))
