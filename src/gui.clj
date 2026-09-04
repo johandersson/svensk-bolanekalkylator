@@ -1,12 +1,12 @@
 (ns gui
   (:require [clojure.string :as str])
   (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
-            Font Graphics2D GridLayout Insets Rectangle RenderingHints]
+            Font Graphics2D GridLayout Insets Point Rectangle RenderingHints]
            [java.net URI]
            [javax.swing BorderFactory JButton JCheckBox JDialog JFrame JLabel
             JPanel JEditorPane JList JMenu JMenuBar JOptionPane JScrollPane
             JTextArea JTextField SwingConstants JSlider JMenuItem UIManager
-            ListSelectionModel Scrollable WindowConstants]
+            JWindow ListSelectionModel Scrollable Timer WindowConstants]
            [javax.swing.border AbstractBorder]
            [javax.swing.event HyperlinkEvent$EventType]))
 
@@ -19,6 +19,8 @@
 (def blue-hover (Color. 29 78 216))
 (def green (Color. 5 150 105))
 (def green-hover (Color. 4 120 87))
+(def red (Color. 220 38 38))
+(def red-hover (Color. 185 28 28))
 (def ui-font "Segoe UI")
 
 (defn- enable-antialiasing! [graphics]
@@ -71,9 +73,10 @@
      (paintComponent [graphics]
        (let [graphics-2d (.create ^Graphics2D graphics)
              model (.getModel this)
-             fill-color (if (or (.isPressed model) (.isRollover model))
-                          hover-color
-                          color)]
+             fill-color (cond
+                          (not (.isEnabled this)) (Color. 148 163 184)
+                          (or (.isPressed model) (.isRollover model)) hover-color
+                          :else color)]
          (.setFont graphics-2d (.getFont this))
          (let [metrics (.getFontMetrics graphics-2d)
                text-x (/ (- (.getWidth this) (.stringWidth metrics text)) 2)
@@ -135,6 +138,48 @@
   (.setTitle (:frame ui)
              (str object-name " · Svensk bolånekalkylator")))
 
+(defn show-toast! [frame message]
+  (let [toast (JWindow. frame)
+        panel (proxy [JPanel] [(BorderLayout.)]
+                (paintComponent [graphics]
+                  (let [graphics-2d (.create ^Graphics2D graphics)]
+                    (enable-antialiasing! graphics-2d)
+                    (.setColor graphics-2d (Color. 15 23 42 45))
+                    (.fillRoundRect graphics-2d 4 5
+                                    (- (.getWidth this) 8)
+                                    (- (.getHeight this) 9) 16 16)
+                    (.setColor graphics-2d green)
+                    (.fillRoundRect graphics-2d 0 0
+                                    (- (.getWidth this) 8)
+                                    (- (.getHeight this) 9) 16 16)
+                    (.dispose graphics-2d))))
+        label (JLabel. message SwingConstants/CENTER)
+        timer (Timer. 2000 nil)]
+    (.setOpaque panel false)
+    (.setBorder panel (BorderFactory/createEmptyBorder 12 24 17 28))
+    (.setFont label (Font. ui-font Font/BOLD 15))
+    (.setForeground label Color/WHITE)
+    (.add panel label BorderLayout/CENTER)
+    (.setContentPane toast panel)
+    (.setFocusableWindowState toast false)
+    (.setAlwaysOnTop toast true)
+    (.setBackground toast (Color. 0 0 0 0))
+    (.pack toast)
+    (let [frame-location (.getLocationOnScreen frame)
+          x (- (+ (.x ^Point frame-location) (.getWidth frame))
+               (.getWidth toast) 24)
+          y (- (+ (.y ^Point frame-location) (.getHeight frame))
+               (.getHeight toast) 48)]
+      (.setLocation toast x y))
+    (.addActionListener
+     timer
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose toast))))
+    (.setRepeats timer false)
+    (.setVisible toast true)
+    (.start timer)))
+
 (defn show-error! [frame title-text message]
   (let [dialog (JDialog. frame title-text true)
         root (JPanel. (BorderLayout. 0 18))
@@ -167,6 +212,66 @@
     (.setResizable dialog false)
     (.setLocationRelativeTo dialog frame)
     (.setVisible dialog true)))
+
+(defn confirm-delete! [frame object-name]
+  (let [confirmed? (atom false)
+        dialog (JDialog. frame "Radera sparat objekt" true)
+        root (JPanel. (BorderLayout. 0 20))
+        heading (JPanel. (GridLayout. 0 1 0 4))
+        title (JLabel. "Radera objektet?")
+        subtitle (JLabel. "Åtgärden går inte att ångra")
+        content (shadow-panel (GridLayout. 0 1 0 8))
+        object-label (JLabel. object-name)
+        message (JLabel. (str "<html><div style='width:390px'>"
+                              "Det sparade objektet och eventuella osparade "
+                              "ändringar tas bort permanent."
+                              "</div></html>"))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 10 0))
+        cancel-btn (rounded-button "Avbryt" (Color. 100 116 139)
+                                   (Color. 71 85 105))
+        delete-btn (rounded-button "Radera" red red-hover)]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 28 28 24 28))
+    (.setOpaque heading false)
+    (.setFont title (Font. ui-font Font/BOLD 24))
+    (.setForeground title text-primary)
+    (.setFont subtitle (Font. ui-font Font/PLAIN 14))
+    (.setForeground subtitle red)
+    (.add heading title)
+    (.add heading subtitle)
+    (.setFont object-label (Font. ui-font Font/BOLD 17))
+    (.setForeground object-label text-primary)
+    (.setFont message (Font. ui-font Font/PLAIN 13))
+    (.setForeground message text-secondary)
+    (.add content object-label)
+    (.add content message)
+    (.setOpaque actions false)
+    (.setPreferredSize cancel-btn (Dimension. 110 42))
+    (.setPreferredSize delete-btn (Dimension. 110 42))
+    (.add actions cancel-btn)
+    (.add actions delete-btn)
+    (.addActionListener
+     cancel-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (.dispose dialog))))
+    (.addActionListener
+     delete-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (reset! confirmed? true)
+         (.dispose dialog))))
+    (.add root heading BorderLayout/NORTH)
+    (.add root content BorderLayout/CENTER)
+    (.add root actions BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.setDefaultButton (.getRootPane dialog) cancel-btn)
+    (.pack dialog)
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    (.setVisible dialog true)
+    @confirmed?))
 
 (defn show-about! [frame]
   (let [dialog (JDialog. frame "Om Bolånekalkylator" true)
@@ -379,6 +484,7 @@
         maximum-cost-btn (rounded-button "Ange maximal totalkostnad"
                  blue blue-hover)
         save-btn (rounded-button "Spara objekt" green green-hover)
+        delete-btn (rounded-button "Radera" red red-hover)
         menu-bar (JMenuBar.)
         file-menu (JMenu. "File")
         new-object-item (JMenuItem. "Nytt objekt")
@@ -416,6 +522,7 @@
     (.setJMenuBar frame menu-bar)
     (.setBackground menu-bar surface)
     (.setBorder menu-bar (BorderFactory/createMatteBorder 0 0 1 0 border-color))
+    (.setEnabled delete-btn false)
     (doseq [field [name-f address-f comment-f listing-url-f p-price-f d-pay-f
              fee-f op-cost-f income-f t-low-f t-high-f]]
       (style-field! field))
@@ -505,13 +612,17 @@
       (.add results-panel results-scroll-pane BorderLayout/CENTER)
       (.setOpaque btn-panel false)
       (.setBorder btn-panel (BorderFactory/createEmptyBorder 4 0 0 0))
-      (.setPreferredSize maximum-cost-btn (Dimension. 230 42))
+      (.setPreferredSize maximum-cost-btn (Dimension. 210 42))
+      (.setPreferredSize calc-btn (Dimension. 145 42))
+      (.setPreferredSize save-btn (Dimension. 140 42))
+      (.setPreferredSize delete-btn (Dimension. 110 42))
       (.add main-panel form BorderLayout/NORTH)
       (.add results-panel header BorderLayout/NORTH)
       (.add main-panel results-panel BorderLayout/CENTER)
       (.add btn-panel maximum-cost-btn)
       (.add btn-panel calc-btn)
       (.add btn-panel save-btn)
+      (.add btn-panel delete-btn)
       (.add main-panel btn-panel BorderLayout/SOUTH)
       (.setBorder app-scroll-pane nil)
       (.setHorizontalScrollBarPolicy
@@ -523,7 +634,8 @@
     (.setVisible frame true)
 
     {:frame frame :results results :calc-btn calc-btn
-     :maximum-cost-btn maximum-cost-btn :save-btn save-btn
+      :maximum-cost-btn maximum-cost-btn :save-btn save-btn
+      :delete-btn delete-btn
       :new-object-item new-object-item :objects-menu objects-menu
       :about-item about-item
     :name-f name-f :address-f address-f :comment-f comment-f

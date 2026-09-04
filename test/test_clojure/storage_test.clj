@@ -68,6 +68,12 @@
 
           (testing "saving an existing name updates only that object"
             (is (= [updated second-object]
+                   (store/load-objects))))
+
+          (testing "deleting an object keeps the other saved objects"
+            (is (= [second-object]
+                   (store/delete-object! updated)))
+            (is (= [second-object]
                    (store/load-objects)))))))))
 
 (deftest invalid-edn-does-not-crash-loading

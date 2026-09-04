@@ -74,3 +74,13 @@
                           (conj objects object))]
     (write-objects! updated-objects)
     updated-objects))
+
+(defn delete-object! [object]
+  (let [objects (load-objects)
+        name (str/trim (or (:name object) ""))
+        matching-object? #(if (str/blank? name)
+                            (= object %)
+                            (= name (str/trim (or (:name %) ""))))
+        remaining-objects (filterv (complement matching-object?) objects)]
+    (write-objects! remaining-objects)
+    remaining-objects))

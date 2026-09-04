@@ -258,21 +258,25 @@
        (nth labels selected-index)])))
 
 (defn init-app []
-  (let [ui              (gui/create-ui)
-        calc-btn        (:calc-btn ui)
+  (let [ui               (gui/create-ui)
+        calc-btn         (:calc-btn ui)
         maximum-cost-btn (:maximum-cost-btn ui)
-        save-btn        (:save-btn ui)
-        new-object-item (:new-object-item ui)
-        about-item      (:about-item ui)
-        rate-slider     (:rate-slider ui)
-        rate-label      (:rate-label ui)
+        save-btn         (:save-btn ui)
+        delete-btn       (:delete-btn ui)
+        new-object-item  (:new-object-item ui)
+        about-item       (:about-item ui)
+        rate-slider      (:rate-slider ui)
+        rate-label       (:rate-label ui)
         objects-menu     (:objects-menu ui)
-        new-object      (editable-state ui)
-        saved-state     (atom new-object)
-        objects         (store/load-objects)]
-    (letfn [(activate-object! [object label]
+        new-object       (editable-state ui)
+        saved-state      (atom new-object)
+        saved-object     (atom nil)
+        objects          (store/load-objects)]
+    (letfn [(activate-object! [object label persisted-object]
               (restore-object! ui (merge new-object object))
               (gui/show-current-object! ui label)
+              (reset! saved-object persisted-object)
+              (.setEnabled delete-btn (some? persisted-object))
               (reset! saved-state (editable-state ui)))
             (save-current! []
               (let [object-name (str/trim (.getText (:name-f ui)))]
@@ -290,9 +294,12 @@
                           saved-objects (store/save-object! object)]
                       (gui/show-link! (:listing-link ui) (:listing-url object))
                       (gui/show-current-object! ui object-name)
+                      (reset! saved-object object)
+                      (.setEnabled delete-btn true)
                       (reset! saved-state (editable-state ui))
                       (refresh-objects-menu!
                        objects-menu saved-objects switch-object!)
+                      (gui/show-toast! (:frame ui) "Sparat!")
                       true)))))
             (may-leave-current? []
               (if (= @saved-state (editable-state ui))
@@ -308,19 +315,29 @@
                   false)))
             (switch-object! [object label]
               (when (may-leave-current?)
-                (activate-object! object label)))
+                (activate-object! object label object)))
             (create-new-object! []
               (when (may-leave-current?)
-                (activate-object! new-object "Nytt objekt")))]
+                (activate-object! new-object "Nytt objekt" nil)))
+            (delete-current! []
+              (when-let [object @saved-object]
+                (let [label (object-label 0 object)]
+                  (when (gui/confirm-delete! (:frame ui) label)
+                    (let [remaining-objects (store/delete-object! object)]
+                      (refresh-objects-menu!
+                       objects-menu remaining-objects switch-object!)
+                      (activate-object! new-object "Nytt objekt" nil)
+                      (gui/show-toast! (:frame ui) "Raderat!"))))))]
       (refresh-objects-menu! objects-menu objects switch-object!)
 
       (cond
         (= 1 (count objects)) (activate-object! (first objects)
-                                                (object-label 0 (first objects)))
+                                                (object-label 0 (first objects))
+                                                (first objects))
         (< 1 (count objects)) (when-let [[object label]
                                          (choose-startup-object
                                           (:frame ui) objects)]
-                                (activate-object! object label)))
+                                (activate-object! object label object)))
 
       (update-rate-label! rate-label rate-slider)
 
@@ -360,7 +377,13 @@
        save-btn
        (reify java.awt.event.ActionListener
          (actionPerformed [_ _]
-           (save-current!)))))))
+           (save-current!))))
+
+      (.addActionListener
+       delete-btn
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (delete-current!)))))))
 
 (defn -main [& args]
   (SwingUtilities/invokeLater
