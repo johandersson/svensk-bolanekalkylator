@@ -1,6 +1,6 @@
 (defproject svensk-bolanekalkylator "0.1.0-SNAPSHOT"
   :description "Bolånekalkylator"
-  :url "https://example.com/FIXME"
+  :url "https://github.com/johandersson/svensk-bolanekalkylator"
   :license {:name "GNU General Public License v3.0"
             :url "https://www.gnu.org/licenses/gpl-3.0.html"}
   :dependencies [[org.clojure/clojure "1.12.2"]]
