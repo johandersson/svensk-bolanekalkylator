@@ -1,4 +1,4 @@
-(ns test-clojure.storage-test
+(ns svensk-bolanekalkylator.storage-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [storage :as store]))

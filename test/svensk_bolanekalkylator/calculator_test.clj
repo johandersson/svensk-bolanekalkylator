@@ -1,4 +1,4 @@
-(ns test-clojure.calculator-test
+(ns svensk-bolanekalkylator.calculator-test
   (:require [calculator :as calculator]
             [clojure.test :refer [deftest is testing]]))
 

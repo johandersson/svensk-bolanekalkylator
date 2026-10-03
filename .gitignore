@@ -299,12 +299,8 @@ docker-compose.local.yml
 # Generated documentation
 # ------------------------------------------------------------------------------
 
-/doc/
 docs/_build/
 site/
-
-# Keep manually maintained documentation examples if needed:
-# !/doc/example.edn
 
 # ------------------------------------------------------------------------------
 # Cloud and deployment tooling

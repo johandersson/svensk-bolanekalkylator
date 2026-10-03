@@ -1,4 +1,4 @@
-(defproject test-clojure "0.1.0-SNAPSHOT"
+(defproject svensk-bolanekalkylator "0.1.0-SNAPSHOT"
   :description "Bolånekalkylator"
   :url "https://example.com/FIXME"
   :license {:name "GNU General Public License v3.0"
