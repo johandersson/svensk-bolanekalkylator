@@ -39,6 +39,18 @@
     (is (.contains help-text "kalkylr"))
     (is (.contains help-text "bankens kreditpr"))))
 
+(deftest about-card-text-wraps-within-card
+  (doseq [[title body] gui/about-help-sections]
+    (let [card (#'gui/help-section title body)
+          body-label (last (filter #(instance? JLabel %)
+                                   (components card)))]
+      (is (<= (.width (.getPreferredSize ^JLabel body-label))
+              gui/about-text-width)
+          title)
+      (is (.contains (.getText ^JLabel body-label)
+                     (str "width='" gui/about-text-width "'"))
+          title))))
+
 (deftest calculation-dialog-layout-and-lifecycle
   (if (GraphicsEnvironment/isHeadless)
     (println "Skipping window lifecycle test in a headless environment.")
@@ -176,6 +188,17 @@
          (try
            (is (= ["Bolån" "Kvar att leva på"]
                   (mapv #(.getTitleAt tabs %) (range (.getTabCount tabs)))))
+           (.setSelectedIndex tabs 0)
+           (doseq [size [940 820]]
+             (.setSize frame size size)
+             (.validate frame)
+             (doseq [button [(:maximum-cost-btn ui) (:calc-btn ui)
+                             (:save-btn ui) (:delete-btn ui)]]
+               (let [bounds (SwingUtilities/convertRectangle
+                             (.getParent button) (.getBounds button) tabs)]
+                 (is (pos? (.height bounds)) (.getText button))
+                 (is (<= (+ (.y bounds) (.height bounds)) (.getHeight tabs))
+                     (.getText button)))))
            (.setSelectedIndex tabs 1)
            (is (= "Beräkna Kvar att leva på" (.getText (:calc-btn kalp-ui))))
            (is (not (.isSelected (:tax-cb kalp-ui))))

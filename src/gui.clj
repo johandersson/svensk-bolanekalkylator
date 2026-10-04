@@ -32,6 +32,7 @@
 (def red-hover (Color. 185 28 28))
 (def ui-font "Segoe UI")
 (def comment-max-length 4000)
+(def about-text-width 430)
 
 (defn- enable-antialiasing! [graphics]
   (.setRenderingHint graphics RenderingHints/KEY_ANTIALIASING
@@ -290,9 +291,9 @@
 (defn- help-section [title-text body-text]
   (let [panel (shadow-panel (BorderLayout. 0 8))
         title (JLabel. title-text)
-        body (JLabel. (str "<html><div style='width:475px'>"
-                           body-text
-                           "</div></html>"))]
+        body (JLabel. (str "<html><body width='" about-text-width "'>"
+                           (escape-html body-text)
+                           "</body></html>"))]
     (.setFont title (Font. ui-font Font/BOLD 16))
     (.setForeground title blue)
     (.setFont body (Font. ui-font Font/PLAIN 13))
@@ -530,11 +531,11 @@
         content (scrollable-panel (GridLayout. 0 1 0 12))
         content-wrapper (JPanel. (BorderLayout.))
         content-scroll (JScrollPane. content)
-        license-text (JLabel. (str "<html><div style='width:475px'>"
+        license-text (JLabel. (str "<html><body width='" about-text-width "'>"
                                    "<b>Fri programvara</b> · GNU General Public "
                                    "License version 3 (GPLv3)<br>"
                                    "Copyright © 2026 Johan Andersson"
-                                   "</div></html>"))
+                                   "</body></html>"))
         actions (JPanel. (FlowLayout. FlowLayout/RIGHT 0 0))
         close-btn (rounded-button "Stäng" blue blue-hover)]
     (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
@@ -995,7 +996,8 @@
           results-scroll-pane (JScrollPane. results)
           results-panel (shadow-panel (BorderLayout.))
           btn-panel (JPanel.)
-          app-scroll-pane (JScrollPane. main-panel)]
+          app-scroll-pane (JScrollPane. main-panel)
+          mortgage-panel (JPanel. (BorderLayout.))]
       (.setBackground main-panel background)
       (.setBorder main-panel (BorderFactory/createEmptyBorder 20 24 20 24))
       (.setPreferredSize main-panel (Dimension. 860 1120))
@@ -1017,7 +1019,8 @@
       (.setMinimumSize results-panel (Dimension. 730 360))
       (.add results-panel results-scroll-pane BorderLayout/CENTER)
       (.setOpaque btn-panel false)
-      (.setBorder btn-panel (BorderFactory/createEmptyBorder 4 0 0 0))
+      (.setBackground btn-panel background)
+      (.setBorder btn-panel (BorderFactory/createEmptyBorder 8 0 10 0))
       (.setPreferredSize maximum-cost-btn (Dimension. 210 42))
       (.setPreferredSize calc-btn (Dimension. 145 42))
       (.setPreferredSize save-btn (Dimension. 140 42))
@@ -1029,14 +1032,16 @@
       (.add btn-panel calc-btn)
       (.add btn-panel save-btn)
       (.add btn-panel delete-btn)
-      (.add main-panel btn-panel BorderLayout/SOUTH)
       (.setBorder app-scroll-pane nil)
       (.setHorizontalScrollBarPolicy
        app-scroll-pane JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
       (.setUnitIncrement (.getVerticalScrollBar app-scroll-pane) 20)
       (.setBackground (.getViewport app-scroll-pane) background)
+      (.setBackground mortgage-panel background)
+      (.add mortgage-panel app-scroll-pane BorderLayout/CENTER)
+      (.add mortgage-panel btn-panel BorderLayout/SOUTH)
       (.setFont tabs (Font. ui-font Font/BOLD 14))
-      (.addTab tabs "Bolån" app-scroll-pane)
+      (.addTab tabs "Bolån" mortgage-panel)
       (.addTab tabs "Kvar att leva på" (:panel kalp-ui))
       (.add frame tabs))
 
