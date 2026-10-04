@@ -240,6 +240,15 @@
          "Kontrollera uppgifterna"
          "Ange giltiga belopp i månadsgränsen och kalkylens obligatoriska fält.")))))
 
+(def kalp-household-input-keys
+  [:net-income :benefits :stress-interest :living-cost :other-debts
+   :transport :childcare :other-cost :buffer :borrowers])
+
+(defn restore-kalp-settings! [ui settings]
+  (doseq [key kalp-household-input-keys
+          :when (contains? settings key)]
+    (.setText (get-in ui [:kalp :fields key]) (str (get settings key)))))
+
 (defn prefill-kalp! [ui reset?]
   (when-let [kalp-ui (:kalp ui)]
     (let [source {:name (.getText (:name-f ui))
@@ -250,13 +259,10 @@
                   :operating-cost (.getText (:op-cost-f ui))
                   :income (.getText (:income-f ui))
                   :interest (slider-interest (:rate-slider ui))
-                  :extra? (.isSelected (:extra-amort-cb ui))
-                  :borrowers (.getSelectedItem (:borrower-count-cb ui))}]
+                  :extra? (.isSelected (:extra-amort-cb ui))}]
       (when (or reset? (not= source @(:source-state kalp-ui)))
         (gui/show-kalp-source! kalp-ui (:name source))
         (when reset?
-          (doseq [[key _ default] kalp/input-fields]
-            (.setText (get (:fields kalp-ui) key) default))
           (.setSelected (:tax-cb kalp-ui) false))
         (let [calculation (calculate-ui! ui)
               values {:loan (if calculation (str (:loan calculation)) "")
@@ -264,8 +270,7 @@
                                       (str (:monthly-amortization calculation)) "")
                       :interest (str (:interest source))
                       :fee (:fee source)
-                      :operating-cost (:operating-cost source)
-                      :borrowers (str (:borrowers source))}]
+                      :operating-cost (:operating-cost source)}]
           (doseq [[key value] values]
             (.setText (get (:fields kalp-ui) key) value)))
         (reset! (:source-state kalp-ui) source)
@@ -283,6 +288,14 @@
                   (assoc inputs :include-tax-reduction?
                          (.isSelected (:tax-cb kalp-ui))))]
         (gui/show-kalp-result! kalp-ui data)
+        (try
+          (store/save-kalp-settings!
+           (select-keys inputs kalp-household-input-keys))
+          (catch Exception _
+            (gui/show-error!
+             (:frame ui)
+             "Kunde inte spara KALP-uppgifterna"
+             "Beräkningen är klar, men hushållsuppgifterna kunde inte sparas.")))
         data)
       (catch IllegalArgumentException e
         (gui/show-error! (:frame ui) "Kontrollera KALP-uppgifterna"
@@ -377,6 +390,7 @@
         saved-object     (atom nil)
         autosave-timer   (Timer. 5000 nil)
         objects          (store/load-objects)]
+    (restore-kalp-settings! ui (store/load-kalp-settings))
     (letfn [(activate-object! [object label persisted-object]
               (restore-object! ui (merge new-object object))
               (gui/show-current-object! ui label)

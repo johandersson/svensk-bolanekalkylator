@@ -63,7 +63,8 @@
 (deftest kalp-prefill-and-session-only-calculation
   (let [ui (assoc (presentation-ui) :kalp (gui/create-kalp-tab))
         fields (get-in ui [:kalp :fields])
-        errors (atom [])]
+        errors (atom [])
+        saved-settings (atom nil)]
     (main/prefill-kalp! ui true)
     (is (= "2500000.0" (.getText (:loan fields))))
     (is (= "4000" (.getText (:fee fields))))
@@ -79,8 +80,13 @@
     (is (= "5000" (.getText (:fee fields))))
     (.setText (:net-income fields) "40000")
     (.setText (:living-cost fields) "12000")
-    (with-redefs [gui/show-error! (fn [& args] (swap! errors conj args))]
+    (with-redefs [gui/show-error! (fn [& args] (swap! errors conj args))
+                  storage/save-kalp-settings! #(reset! saved-settings %)]
       (is (map? (main/calculate-kalp! ui)))
+      (is (= {:net-income 40000.0 :benefits 0.0 :stress-interest 7.0
+              :living-cost 12000.0 :other-debts 0.0 :transport 0.0
+              :childcare 0.0 :other-cost 0.0 :buffer 0.0 :borrowers 1.0}
+             @saved-settings))
       (.setText (:net-income fields) "NaN")
       (is (nil? (main/calculate-kalp! ui))))
     (is (= 1 (count @errors)))
@@ -96,8 +102,9 @@
                           [:interest-slider-value :borrower-count
                            :extra-amortization? :calculation :result-text]))
              (set (keys object)))))
+    (.setText (:net-income fields) "40000")
     (main/prefill-kalp! ui true)
-    (is (= "" (.getText (:net-income fields))))
+    (is (= "40000" (.getText (:net-income fields))))
     (is (= "5000" (.getText (:fee fields))))))
 
 (deftest saved-object-restores-related-kalp-inputs-only
@@ -121,7 +128,7 @@
     (is (= "4000.0" (.getText (:amortization fields))))
     (is (= "4500" (.getText (:fee fields))))
     (is (= "1500" (.getText (:operating-cost fields))))
-    (is (= "2" (.getText (:borrowers fields))))
+    (is (= "1" (.getText (:borrowers fields))))
     (is (= "" (.getText (:net-income fields))))
     (is (.contains (.getText (get-in ui [:kalp :source-label])) "Sparad bostad"))
     (.setText (:net-income fields) "45000")
@@ -130,8 +137,20 @@
          :purchase-price "2000000" :down-payment "600000"
          :monthly-fee "2000" :monthly-operating-cost "1000"
          :interest-slider-value 60 :extra-amortization? false})
-    (is (= "" (.getText (:net-income fields))))
+    (is (= "45000" (.getText (:net-income fields))))
     (is (= "1400000.0" (.getText (:loan fields))))))
+
+(deftest restores-only-independent-kalp-settings
+  (let [ui (assoc (presentation-ui) :kalp (gui/create-kalp-tab))
+        fields (get-in ui [:kalp :fields])]
+    (main/restore-kalp-settings!
+     ui {:net-income 42000.0 :living-cost 13000.0 :buffer 2000.0
+         :loan 999999.0 :fee 9999.0})
+    (is (= "42000.0" (.getText (:net-income fields))))
+    (is (= "13000.0" (.getText (:living-cost fields))))
+    (is (= "2000.0" (.getText (:buffer fields))))
+    (is (= "" (.getText (:loan fields))))
+    (is (= "" (.getText (:fee fields))))))
 
 (deftest explicit-calculation-presents-fresh-results-every-time
   (let [ui (presentation-ui)

@@ -27,14 +27,23 @@
   (with-open [reader (PushbackReader. (io/reader file))]
     (edn/read {:eof nil} reader)))
 
-(defn load-objects []
+(defn- load-settings []
   (try
     (let [data (some-> (existing-settings-file) read-data)]
       (cond
-        (vector? (:objects data)) (:objects data)
-        (map? data) [data]
-        :else []))
-    (catch Exception _ [])))
+        (and (map? data) (contains? data :objects))
+        (update data :objects #(if (vector? %) % []))
+
+        (map? data) {:objects [data]}
+        :else {:objects []}))
+    (catch Exception _ {:objects []})))
+
+(defn load-objects []
+  (:objects (load-settings)))
+
+(defn load-kalp-settings []
+  (let [settings (:kalp-settings (load-settings))]
+    (if (map? settings) settings {})))
 
 (defn- replace-file! [temporary target]
   (try
@@ -49,7 +58,7 @@
                   (into-array CopyOption
                               [StandardCopyOption/REPLACE_EXISTING])))))
 
-(defn- write-objects! [objects]
+(defn- write-settings! [settings]
   (let [target (io/file settings-file)
         parent (.getParentFile target)]
     (when parent
@@ -57,10 +66,17 @@
     (let [temporary (java.io.File/createTempFile
                      "bolanekalkylator-" ".tmp" parent)]
       (try
-        (spit temporary (str (pr-str {:objects objects}) "\n"))
+        (spit temporary (str (pr-str settings) "\n"))
         (replace-file! temporary target)
         (finally
           (.delete temporary))))))
+
+(defn- write-objects! [objects]
+  (write-settings! (assoc (load-settings) :objects objects)))
+
+(defn save-kalp-settings! [settings]
+  (write-settings! (assoc (load-settings) :kalp-settings settings))
+  settings)
 
 (defn save-object! [object]
   (let [objects (load-objects)

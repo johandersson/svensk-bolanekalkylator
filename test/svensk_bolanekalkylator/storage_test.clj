@@ -92,9 +92,32 @@
         (is (= [updated-object other-object]
                (store/load-objects)))))))
 
+(deftest stores-kalp-settings-independently-from-objects
+  (with-temp-storage
+    (fn []
+      (let [object {:name "Bostad" :address "Testgatan 1"}
+            kalp-settings {:net-income 40000.0
+                           :living-cost 12000.0
+                           :transport 2000.0
+                           :buffer 1500.0}]
+        (store/save-object! object)
+        (is (= kalp-settings (store/save-kalp-settings! kalp-settings)))
+        (is (= [object] (store/load-objects)))
+        (is (= kalp-settings (store/load-kalp-settings)))
+
+        (testing "later object writes preserve the household settings"
+          (store/save-object! (assoc object :address "Ny adress"))
+          (is (= kalp-settings (store/load-kalp-settings))))
+
+        (testing "later household writes preserve apartment objects"
+          (store/save-kalp-settings! (assoc kalp-settings :buffer 2000.0))
+          (is (= [(assoc object :address "Ny adress")]
+                 (store/load-objects))))))))
+
 (deftest invalid-edn-does-not-crash-loading
   (with-temp-storage
     (fn []
       (.mkdirs (.getParentFile (io/file store/settings-file)))
       (spit store/settings-file "{:objects [")
-      (is (= [] (store/load-objects))))))
+      (is (= [] (store/load-objects)))
+      (is (= {} (store/load-kalp-settings))))))
