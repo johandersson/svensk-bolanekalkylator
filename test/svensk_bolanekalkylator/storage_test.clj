@@ -21,7 +21,7 @@
   (with-temp-storage
     (fn []
       (let [legacy-object {:address "Gamla vägen 1"}
-        new-object {:name "Nytt objekt" :address "Nya vägen 2"}]
+            new-object {:name "Nytt objekt" :address "Nya vägen 2"}]
         (spit store/legacy-settings-file (pr-str legacy-object))
         (is (= [legacy-object] (store/load-objects)))
 
@@ -36,7 +36,7 @@
   (with-temp-storage
     (fn []
       (let [first-object {:name "Första objektet"
-              :address "Första vägen 1"
+                          :address "Första vägen 1"
                           :comment "Nära stationen"
                           :listing-url "https://example.se/objekt/1"
                           :purchase-price "3231000"
@@ -75,6 +75,22 @@
                    (store/delete-object! updated)))
             (is (= [second-object]
                    (store/load-objects)))))))))
+
+(deftest replaces-only-the-opened-object
+  (with-temp-storage
+    (fn []
+      (let [opened-object {:name "Första objektet" :address "Gammal adress"}
+            other-object {:name "Andra objektet" :address "Oförändrad adress"}
+            updated-object (assoc opened-object
+                                  :name "Nytt namn"
+                                  :address "Ny adress")]
+        (store/save-object! opened-object)
+        (store/save-object! other-object)
+
+        (is (= [updated-object other-object]
+               (store/replace-object! opened-object updated-object)))
+        (is (= [updated-object other-object]
+               (store/load-objects)))))))
 
 (deftest invalid-edn-does-not-crash-loading
   (with-temp-storage

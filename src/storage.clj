@@ -75,6 +75,15 @@
     (write-objects! updated-objects)
     updated-objects))
 
+(defn replace-object! [opened-object updated-object]
+  (let [objects (load-objects)
+        updated-objects (mapv #(if (= opened-object %)
+                                 updated-object
+                                 %)
+                              objects)]
+    (write-objects! updated-objects)
+    updated-objects))
+
 (defn delete-object! [object]
   (let [objects (load-objects)
         name (str/trim (or (:name object) ""))

@@ -4,11 +4,21 @@
             [storage :as store]
             [gui :as gui]
             [clojure.string :as str])
-  (:import [javax.swing JMenuItem JOptionPane SwingUtilities]))
+  (:import [javax.swing JMenuItem JOptionPane SwingUtilities Timer]))
 
-(defn parse-number [field]
-  (Double/parseDouble
-   (str/replace (.getText field) "," ".")))
+(defn parse-number
+  ([field]
+   (parse-number field "fältet"))
+  ([field field-name]
+   (let [value (str/trim (.getText field))]
+     (when (str/blank? value)
+       (throw (IllegalArgumentException.
+               (str "Fyll i " field-name "."))))
+     (try
+       (Double/parseDouble (str/replace value "," "."))
+       (catch NumberFormatException _
+         (throw (IllegalArgumentException.
+                 (str "Ange ett giltigt tal för " field-name "."))))))))
 
 (defn parse-number-text [value]
   (Double/parseDouble (str/replace value "," ".")))
@@ -32,20 +42,21 @@
    fee-f
    op-cost-f
    income-f
-   t-low-f
-   t-high-f
+   _t-low-f
+   _t-high-f
    rate-slider
    extra-amort-cb
    borrower-count-cb]
 
   (try
-    (let [p-price  (parse-number p-price-f)
-          d-pay    (parse-number d-pay-f)
-          m-fee    (parse-number fee-f)
-          m-op     (parse-number op-cost-f)
-          inc      (parse-number income-f)
-          t-low    (parse-number t-low-f)
-          t-high   (parse-number t-high-f)
+    (let [extra-amortization? (.isSelected extra-amort-cb)
+          p-price  (parse-number p-price-f "köpeskilling")
+          d-pay    (parse-number d-pay-f "kontantinsats")
+          m-fee    (parse-number fee-f "månadsavgift")
+          m-op     (parse-number op-cost-f "driftskostnad")
+          inc      (if extra-amortization?
+                     (parse-number income-f "hushållets bruttoinkomst")
+                     0.0)
           interest (slider-interest rate-slider)
           data     (calc/calculate-loan
                     p-price
@@ -54,9 +65,9 @@
                     m-fee
                     m-op
                     inc
-                    t-low
-                    t-high
-                    (.isSelected extra-amort-cb)
+                    (* 100.0 calc/tax-reduction-low)
+                    (* 100.0 calc/tax-reduction-high)
+                    extra-amortization?
                     (int (.getSelectedItem borrower-count-cb)))]
 
       (.setText
@@ -232,6 +243,11 @@
          :calculation calculation
          :result-text (.getText (:results ui))))
 
+(defn autosave-open-object! [opened-object current-state]
+  (let [updated-object (merge opened-object current-state)]
+    (store/replace-object! opened-object updated-object)
+    updated-object))
+
 (defn object-label [index object]
   (let [name (str/trim (or (:name object) ""))
         address (str/trim (or (:address object) ""))]
@@ -279,6 +295,7 @@
         new-object       (editable-state ui)
         saved-state      (atom new-object)
         saved-object     (atom nil)
+        autosave-timer   (Timer. 10000 nil)
         objects          (store/load-objects)]
     (letfn [(activate-object! [object label persisted-object]
               (restore-object! ui (merge new-object object))
@@ -338,6 +355,20 @@
                       (gui/show-toast! (:frame ui) "Raderat!"))))))]
       (refresh-objects-menu! objects-menu objects switch-object!)
       (gui/bind-save-shortcut! (:frame ui) save-current!)
+      (.addActionListener
+       autosave-timer
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (when-let [opened-object @saved-object]
+             (let [current-state (editable-state ui)]
+               (when-not (= @saved-state current-state)
+                 (let [updated-object
+                       (autosave-open-object! opened-object current-state)]
+                   (reset! saved-object updated-object)
+                   (reset! saved-state current-state)
+                   (refresh-objects-menu!
+                    objects-menu (store/load-objects) switch-object!))))))))
+      (.start autosave-timer)
 
       (cond
         (= 1 (count objects)) (activate-object! (first objects)
