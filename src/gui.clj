@@ -16,7 +16,8 @@
             JMenuItem KeyStroke UIManager JWindow ListSelectionModel Scrollable
             Timer WindowConstants JTabbedPane]
            [javax.swing.border AbstractBorder]
-           [javax.swing.event DocumentListener HyperlinkEvent$EventType]))
+           [javax.swing.event DocumentListener HyperlinkEvent$EventType]
+           [javax.swing.text AbstractDocument DocumentFilter]))
 
 (def background (Color. 246 248 252))
 (def surface Color/WHITE)
@@ -30,6 +31,7 @@
 (def red (Color. 220 38 38))
 (def red-hover (Color. 185 28 28))
 (def ui-font "Segoe UI")
+(def comment-max-length 4000)
 
 (defn- enable-antialiasing! [graphics]
   (.setRenderingHint graphics RenderingHints/KEY_ANTIALIASING
@@ -108,6 +110,23 @@
   (.setForeground field text-primary)
   (.setBackground field surface)
   (.setBorder field (rounded-border border-color)))
+
+(defn limit-text-length! [field max-length]
+  (let [document ^AbstractDocument (.getDocument field)]
+    (.setDocumentFilter
+     document
+     (proxy [DocumentFilter] []
+       (insertString [bypass offset text attributes]
+         (let [available (- max-length (.getLength (.getDocument bypass)))
+               accepted (subs (or text "") 0 (min available (count (or text ""))))]
+           (when (seq accepted)
+             (proxy-super insertString bypass offset accepted attributes))))
+       (replace [bypass offset length text attributes]
+         (let [available (+ (- max-length (.getLength (.getDocument bypass)))
+                            length)
+               accepted (subs (or text "") 0 (min available (count (or text ""))))]
+           (proxy-super replace bypass offset length accepted attributes)))))
+    field))
 
 (defn- add-row! [panel label component]
   (let [label-component (JLabel. label SwingConstants/LEFT)]
@@ -244,6 +263,43 @@
 
 (defn show-info! [frame title-text message]
   (show-message! frame title-text message))
+
+(def about-help-sections
+  [["Bolånekalkyl"
+    (str "Beräkna ränta, amortering, skattereduktion och total månadskostnad. "
+         "Ränteslidern visar snabbt hur kostnaden påverkas av en annan ränta, "
+         "och extra amortering kan räknas med vid hög skuldkvot.")]
+   ["Maximal boendekostnad"
+    (str "Ange hur mycket boendet högst får kosta per månad för att uppskatta "
+         "en passande köpeskilling utifrån kontantinsats, avgift och drift.")]
+   ["Kvar att leva på"
+    (str "Gör en enkel hushållsbudget med inkomster, boende och övriga "
+         "utgifter. Du ser vad som återstår både vid avtalad ränta och vid en "
+         "högre kalkylränta. Det är särskilt användbart för att pröva "
+         "marginalerna inför ett bostadsköp eller en räntehöjning, men "
+         "ersätter inte bankens kreditprövning.")]
+   ["Spara och hantera objekt"
+    (str "Spara flera bostäder med namn, adress, kommentar och annonslänk. "
+         "Öppna, uppdatera eller radera objekt via menyn; ändringar i ett "
+         "öppnat objekt sparas automatiskt.")]
+   ["Resultat och jämförelse"
+    (str "Öppna den detaljerade kalkylen för en tydlig kostnadsöversikt och "
+         "kopiera den till urklipp. Växla mellan sparade objekt för att "
+         "jämföra olika bostäder och ekonomiska förutsättningar.")]])
+
+(defn- help-section [title-text body-text]
+  (let [panel (shadow-panel (BorderLayout. 0 8))
+        title (JLabel. title-text)
+        body (JLabel. (str "<html><div style='width:475px'>"
+                           body-text
+                           "</div></html>"))]
+    (.setFont title (Font. ui-font Font/BOLD 16))
+    (.setForeground title blue)
+    (.setFont body (Font. ui-font Font/PLAIN 13))
+    (.setForeground body text-secondary)
+    (.add panel title BorderLayout/NORTH)
+    (.add panel body BorderLayout/CENTER)
+    panel))
 
 (defn system-clipboard []
   (.getSystemClipboard (Toolkit/getDefaultToolkit)))
@@ -467,27 +523,23 @@
 
 (defn show-about! [frame]
   (let [dialog (JDialog. frame "Om Bolånekalkylator" true)
-        root (JPanel. (BorderLayout. 0 20))
+        root (JPanel. (BorderLayout. 0 16))
         heading (JPanel. (GridLayout. 0 1 0 4))
         title (JLabel. "Bolånekalkylator")
         subtitle (JLabel. "Ett enklare beslutsunderlag för ditt nästa boende")
-        content (shadow-panel (GridLayout. 0 1 0 10))
-        description (JLabel. (str "<html><div style='width:420px'>"
-                                  "Beräkna månadskostnad, ränta och amortering "
-                                  "för svenska bolån. Spara flera objekt med "
-                                  "adress, kommentar och länk till annonsen."
-                                  "</div></html>"))
-        license-title (JLabel. "Fri programvara")
-        license-text (JLabel. (str "<html><div style='width:420px'>"
-                                   "Programmet distribueras under GNU General "
-                                   "Public License version 3 (GPLv3)."
-                                   "<br><br>Copyright © 2026 Johan Andersson"
+        content (scrollable-panel (GridLayout. 0 1 0 12))
+        content-wrapper (JPanel. (BorderLayout.))
+        content-scroll (JScrollPane. content)
+        license-text (JLabel. (str "<html><div style='width:475px'>"
+                                   "<b>Fri programvara</b> · GNU General Public "
+                                   "License version 3 (GPLv3)<br>"
+                                   "Copyright © 2026 Johan Andersson"
                                    "</div></html>"))
         actions (JPanel. (FlowLayout. FlowLayout/RIGHT 0 0))
         close-btn (rounded-button "Stäng" blue blue-hover)]
     (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
     (.setBackground root background)
-    (.setBorder root (BorderFactory/createEmptyBorder 28 28 24 28))
+    (.setBorder root (BorderFactory/createEmptyBorder 24 24 20 24))
     (.setOpaque heading false)
     (.setFont title (Font. ui-font Font/BOLD 28))
     (.setForeground title text-primary)
@@ -495,15 +547,19 @@
     (.setForeground subtitle text-secondary)
     (.add heading title)
     (.add heading subtitle)
-    (.setFont description (Font. ui-font Font/PLAIN 14))
-    (.setForeground description text-primary)
-    (.setFont license-title (Font. ui-font Font/BOLD 16))
-    (.setForeground license-title green)
+    (doseq [[section-title section-body] about-help-sections]
+      (.add content (help-section section-title section-body)))
     (.setFont license-text (Font. ui-font Font/PLAIN 13))
     (.setForeground license-text text-secondary)
-    (.add content description)
-    (.add content license-title)
     (.add content license-text)
+    (.setOpaque content false)
+    (.setOpaque content-wrapper false)
+    (.setBorder content-scroll nil)
+    (.setHorizontalScrollBarPolicy
+     content-scroll JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
+    (.setUnitIncrement (.getVerticalScrollBar content-scroll) 18)
+    (.setBackground (.getViewport content-scroll) background)
+    (.add content-wrapper content-scroll BorderLayout/CENTER)
     (.setOpaque actions false)
     (.setPreferredSize close-btn (Dimension. 110 42))
     (.add actions close-btn)
@@ -513,11 +569,11 @@
        (actionPerformed [_ _]
          (.dispose dialog))))
     (.add root heading BorderLayout/NORTH)
-    (.add root content BorderLayout/CENTER)
+    (.add root content-wrapper BorderLayout/CENTER)
     (.add root actions BorderLayout/SOUTH)
     (.setContentPane dialog root)
     (.setDefaultButton (.getRootPane dialog) close-btn)
-    (.pack dialog)
+    (.setSize dialog 610 720)
     (.setResizable dialog false)
     (.setLocationRelativeTo dialog frame)
     (.setVisible dialog true)))
@@ -826,7 +882,8 @@
         rate-label (JLabel. "")
         name-f (JTextField.)
         address-f (JTextField.)
-        comment-f (JTextField.)
+        comment-f (limit-text-length! (JTextArea. 2 30) comment-max-length)
+        comment-scroll-pane (JScrollPane. comment-f)
         listing-url-f (JTextField.)
         listing-link (JEditorPane.)
         current-object-label (JLabel. "Öppet objekt: Nytt objekt"
@@ -862,6 +919,16 @@
     (doseq [field [name-f address-f comment-f listing-url-f p-price-f d-pay-f
                    fee-f op-cost-f income-f t-low-f t-high-f]]
       (style-field! field))
+    (.setLineWrap comment-f true)
+    (.setWrapStyleWord comment-f true)
+    (.setMargin comment-f (Insets. 7 10 7 10))
+    (.setBorder comment-f nil)
+    (.setBorder comment-scroll-pane (rounded-border border-color))
+    (.setHorizontalScrollBarPolicy
+     comment-scroll-pane JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
+    (.setVerticalScrollBarPolicy
+     comment-scroll-pane JScrollPane/VERTICAL_SCROLLBAR_AS_NEEDED)
+    (.setBackground (.getViewport comment-scroll-pane) surface)
     (.setEditable t-low-f false)
     (.setEditable t-high-f false)
     (.setFont extra-amort-cb (Font. ui-font Font/PLAIN 13))
@@ -901,7 +968,7 @@
 
     (add-row! form "Objektnamn *:" name-f)
     (add-row! form "Adress:" address-f)
-    (add-row! form "Kommentar:" comment-f)
+    (add-row! form "Kommentar (max 4 000 tecken):" comment-scroll-pane)
     (add-row! form "Annonsens webbadress:" listing-url-f)
     (add-row! form "Sparad länk:" listing-link)
     (add-row! form "Köpeskilling (kr):" p-price-f)

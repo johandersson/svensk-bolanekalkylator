@@ -8,7 +8,7 @@
            [java.awt.datatransfer Clipboard DataFlavor]
            [java.awt.event ActionEvent WindowEvent]
            [javax.swing JButton JComponent JFrame JLabel KeyStroke SwingUtilities Timer
-            WindowConstants]))
+            JTextArea JTextField WindowConstants]))
 
 (defn components [root]
   (tree-seq #(instance? Container %)
@@ -20,6 +20,24 @@
        (filter #(instance? JLabel %))
        (map #(.getText ^JLabel %))
        set))
+
+(deftest comment-field-is-limited-to-4000-characters
+  (let [field (gui/limit-text-length! (JTextField.) gui/comment-max-length)]
+    (.setText field (apply str (repeat 4001 "a")))
+    (is (= 4000 (count (.getText field))))
+    (.select field 3998 4000)
+    (.replaceSelection field "bbbb")
+    (is (= 4000 (count (.getText field))))
+    (is (.endsWith (.getText field) "bb"))))
+
+(deftest about-help-covers-every-major-function
+  (let [titles (set (map first gui/about-help-sections))
+        help-text (apply str (map second gui/about-help-sections))]
+    (is (= #{"Bolånekalkyl" "Maximal boendekostnad" "Kvar att leva på"
+             "Spara och hantera objekt" "Resultat och jämförelse"}
+           titles))
+    (is (.contains help-text "kalkylr"))
+    (is (.contains help-text "bankens kreditpr"))))
 
 (deftest calculation-dialog-layout-and-lifecycle
   (if (GraphicsEnvironment/isHeadless)
