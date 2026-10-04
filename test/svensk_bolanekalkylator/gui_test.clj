@@ -1,6 +1,8 @@
 (ns svensk-bolanekalkylator.gui-test
   (:require [calculator :as calc]
             [clojure.test :refer [deftest is]]
+            [kalp :as kalp]
+            [svensk-bolanekalkylator.kalp-test :as kalp-test]
             [gui :as gui])
   (:import [java.awt Container GraphicsEnvironment]
            [java.awt.datatransfer Clipboard DataFlavor]
@@ -144,3 +146,45 @@
       (is (= 1 (count @messages)))
       (is (= "Kunde inte kopiera" (second (first @messages))))
       (is (empty? @toasts)))))
+
+(deftest kalp-tab-and-readable-summary
+  (when-not (GraphicsEnvironment/isHeadless)
+    (SwingUtilities/invokeAndWait
+     (bound-fn []
+       (let [ui (gui/create-ui)
+             frame (:frame ui)
+             tabs (:tabs ui)
+             kalp-ui (:kalp ui)]
+         (try
+           (is (= ["Bolån" "Kvar att leva på"]
+                  (mapv #(.getTitleAt tabs %) (range (.getTabCount tabs)))))
+           (.setSelectedIndex tabs 1)
+           (is (= "Beräkna Kvar att leva på" (.getText (:calc-btn kalp-ui))))
+           (is (not (.isSelected (:tax-cb kalp-ui))))
+           (gui/show-kalp-result! kalp-ui (kalp/calculate kalp-test/inputs))
+           (doseq [size [940 820]]
+             (.setSize frame size size)
+             (.validate frame)
+             (doseq [component (components (:panel kalp-ui))
+                     :when (instance? JLabel component)]
+               (is (>= (.getWidth ^JLabel component)
+                       (.width (.getPreferredSize ^JLabel component)))
+                   (.getText ^JLabel component))))
+           (is (contains? (component-labels (:result kalp-ui)) "1000,00 kr/mån"))
+           (is (some #(.contains ^String % "överskott")
+                     (component-labels (:result kalp-ui))))
+           (.setText (get-in kalp-ui [:fields :net-income]) "50000")
+           (is (zero? (.getComponentCount (:result kalp-ui))))
+           (gui/show-kalp-result! kalp-ui
+                                  (kalp/calculate
+                                   (assoc kalp-test/inputs :net-income 30000.0)))
+           (is (some #(.contains ^String % "Underskott")
+                     (component-labels (:result kalp-ui))))
+           (gui/show-kalp-result! kalp-ui
+                                  (kalp/calculate
+                                   (assoc kalp-test/inputs :net-income 39000.0)))
+           (is (some #(.contains ^String % "utan marginal")
+                     (component-labels (:result kalp-ui))))
+           (.doClick (:tax-cb kalp-ui))
+           (is (zero? (.getComponentCount (:result kalp-ui))))
+           (finally (.dispose frame))))))))

@@ -3,6 +3,7 @@
   (:require [calculator :as calc]
             [storage :as store]
             [gui :as gui]
+            [kalp :as kalp]
             [clojure.string :as str])
   (:import [javax.swing JMenuItem JOptionPane SwingUtilities Timer]))
 
@@ -239,6 +240,55 @@
          "Kontrollera uppgifterna"
          "Ange giltiga belopp i månadsgränsen och kalkylens obligatoriska fält.")))))
 
+(defn prefill-kalp! [ui reset?]
+  (when-let [kalp-ui (:kalp ui)]
+    (let [source {:name (.getText (:name-f ui))
+                  :address (.getText (:address-f ui))
+                  :purchase-price (.getText (:p-price-f ui))
+                  :down-payment (.getText (:d-pay-f ui))
+                  :fee (.getText (:fee-f ui))
+                  :operating-cost (.getText (:op-cost-f ui))
+                  :income (.getText (:income-f ui))
+                  :interest (slider-interest (:rate-slider ui))
+                  :extra? (.isSelected (:extra-amort-cb ui))
+                  :borrowers (.getSelectedItem (:borrower-count-cb ui))}]
+      (when (or reset? (not= source @(:source-state kalp-ui)))
+        (gui/show-kalp-source! kalp-ui (:name source))
+        (when reset?
+          (doseq [[key _ default] kalp/input-fields]
+            (.setText (get (:fields kalp-ui) key) default))
+          (.setSelected (:tax-cb kalp-ui) false))
+        (let [calculation (calculate-ui! ui)
+              values {:loan (if calculation (str (:loan calculation)) "")
+                      :amortization (if calculation
+                                      (str (:monthly-amortization calculation)) "")
+                      :interest (str (:interest source))
+                      :fee (:fee source)
+                      :operating-cost (:operating-cost source)
+                      :borrowers (str (:borrowers source))}]
+          (doseq [[key value] values]
+            (.setText (get (:fields kalp-ui) key) value)))
+        (reset! (:source-state kalp-ui) source)
+        (gui/clear-kalp-result! kalp-ui)))))
+
+(defn calculate-kalp! [ui]
+  (let [kalp-ui (:kalp ui)]
+    (gui/clear-kalp-result! kalp-ui)
+    (try
+      (let [inputs (into {} (map (fn [[key label _]]
+                                   [key (parse-number
+                                         (get (:fields kalp-ui) key) label)])
+                                 kalp/input-fields))
+            data (kalp/calculate
+                  (assoc inputs :include-tax-reduction?
+                         (.isSelected (:tax-cb kalp-ui))))]
+        (gui/show-kalp-result! kalp-ui data)
+        data)
+      (catch IllegalArgumentException e
+        (gui/show-error! (:frame ui) "Kontrollera KALP-uppgifterna"
+                         (.getMessage e))
+        nil))))
+
 (defn restore-object! [ui object]
   (doseq [[field-key object-key] field-keys]
     (restore-field! (get ui field-key) object object-key))
@@ -255,7 +305,8 @@
                     (Integer/valueOf (int (get object :borrower-count 1))))
 
   (update-rate-label! (:rate-label ui) (:rate-slider ui))
-  (calculate-ui! ui))
+  (calculate-ui! ui)
+  (prefill-kalp! ui true))
 
 (defn editable-state [ui]
   (merge
@@ -409,6 +460,19 @@
                                 (activate-object! object label object)))
 
       (update-rate-label! rate-label rate-slider)
+
+      (.addChangeListener
+       (:tabs ui)
+       (reify javax.swing.event.ChangeListener
+         (stateChanged [_ _]
+           (when (= 1 (.getSelectedIndex (:tabs ui)))
+             (prefill-kalp! ui false)))))
+
+      (.addActionListener
+       (:calc-btn (:kalp ui))
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _]
+           (calculate-kalp! ui))))
 
       (.addActionListener
        calc-btn

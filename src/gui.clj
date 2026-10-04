@@ -1,7 +1,8 @@
 (ns gui
   (:require [calculator :as calc]
+            [kalp :as kalp]
             [clojure.string :as str])
-  (:import [java.awt BorderLayout Color Cursor Desktop Dialog$ModalityType Dimension FlowLayout
+  (:import [java.awt BorderLayout Color Cursor Desktop Desktop$Action Dialog$ModalityType Dimension FlowLayout
             Font Graphics2D GridLayout Insets Point Rectangle RenderingHints
             Toolkit Window]
            [java.awt.datatransfer StringSelection]
@@ -13,9 +14,9 @@
             JDialog JFrame JLabel JPanel JEditorPane JList JMenu JMenuBar
             JOptionPane JScrollPane JTextArea JTextField SwingConstants JSlider
             JMenuItem KeyStroke UIManager JWindow ListSelectionModel Scrollable
-            Timer WindowConstants]
+            Timer WindowConstants JTabbedPane]
            [javax.swing.border AbstractBorder]
-           [javax.swing.event HyperlinkEvent$EventType]))
+           [javax.swing.event DocumentListener HyperlinkEvent$EventType]))
 
 (def background (Color. 246 248 252))
 (def surface Color/WHITE)
@@ -673,6 +674,136 @@
     (.setVisible dialog true)
     @selected-index))
 
+(declare clear-kalp-result!)
+
+(defn create-kalp-tab []
+  (let [panel (scrollable-panel (BorderLayout. 0 16))
+        form (shadow-panel (GridLayout. 0 2 12 12))
+        fields (into {} (map (fn [[key _ default]]
+                               [key (doto (JTextField. default) (style-field!))])
+                             kalp/input-fields))
+        tax-cb (JCheckBox. "Räkna med skattereduktion (kräver tillräcklig skatt)")
+        calculate-btn (rounded-button "Beräkna Kvar att leva på" blue blue-hover)
+        reference-btn (rounded-button "Konsumentverkets kostnader" blue blue-hover)
+        result (JPanel. (BorderLayout.))
+        source-label (result-label "Bostadsuppgifter hämtas från fliken Bolån."
+                                   13 true blue)
+        header (JPanel. (GridLayout. 0 1 0 8))
+        scroll (JScrollPane. panel)]
+    (.setBackground panel background)
+    (.setBorder panel (BorderFactory/createEmptyBorder 20 24 20 24))
+    (.setOpaque header false)
+    (.add header (result-label "Kvar att leva på" 26 true text-primary))
+    (.add header source-label)
+    (.add header
+          (result-label
+           (str "<html>Hushållsbudget och stresstest, inte ett lånelöfte.<br>"
+                "Alla kostnader anges per månad. Nettoinkomst är efter skatt.<br>"
+                "Ange levnadskostnader för alla vuxna och barn, anpassat efter ålder.<br>"
+                "Ta med mat, kläder, hygien, fritid och gemensamma hushållskostnader.<br>"
+                "Konsumentverkets belopp inkluderar el, vatten och hemförsäkring.<br>"
+                "Räkna dem inte igen om de ingår i driftskostnad eller avgift.<br>"
+                "Lägg till transport, barnomsorg, vård och andra lån separat.<br>"
+                "Kontrollera amorteringen mot bankens avtal. Den kan ändras här.<br>"
+                "7 % är ett ändringsbart exempel, inte en gemensam bankstandard.<br>"
+                "Skattereduktion är ett årsgenomsnitt, inte automatiskt en månadsutbetalning.</html>")
+           13 false text-secondary))
+    (doseq [[key label _] kalp/input-fields]
+      (add-row! form label (get fields key)))
+    (.setOpaque tax-cb false)
+    (.setForeground tax-cb text-primary)
+    (.add form tax-cb)
+    (.add form (JLabel. "Utan skattereduktion som standard"))
+    (.setPreferredSize calculate-btn (Dimension. 260 42))
+    (.add form calculate-btn)
+    (.add form (JLabel. "Sparas inte i objektet"))
+    (.setPreferredSize reference-btn (Dimension. 260 42))
+    (.add form reference-btn)
+    (.add form (JLabel. "Referensvärden 2026, inte bankens schablon"))
+    (.addActionListener
+     reference-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (try
+           (when-not (and (Desktop/isDesktopSupported)
+                          (.isSupported (Desktop/getDesktop) Desktop$Action/BROWSE))
+             (throw (UnsupportedOperationException. "Webbläsare saknas")))
+           (.browse (Desktop/getDesktop)
+                    (URI. "https://www.konsumentverket.se/ekonomi/vilka-kostnader-har-ett-hushall/"))
+           (catch java.io.IOException _
+             (show-error! (javax.swing.SwingUtilities/getWindowAncestor panel)
+                          "Kunde inte öppna källan" "Kontrollera din webbläsare."))
+           (catch UnsupportedOperationException _
+             (show-error! (javax.swing.SwingUtilities/getWindowAncestor panel)
+                          "Kunde inte öppna källan" "Webbläsare stöds inte på denna dator."))))))
+    (.setOpaque result false)
+    (.add panel header BorderLayout/NORTH)
+    (.add panel form BorderLayout/CENTER)
+    (.add panel result BorderLayout/SOUTH)
+    (.setBorder scroll nil)
+    (.setHorizontalScrollBarPolicy scroll JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
+    (.setUnitIncrement (.getVerticalScrollBar scroll) 24)
+    (let [clear-result (fn [] (clear-kalp-result! {:result result}))]
+      (doseq [field (vals fields)]
+        (.addDocumentListener
+         (.getDocument field)
+         (reify DocumentListener
+           (insertUpdate [_ _] (clear-result))
+           (removeUpdate [_ _] (clear-result))
+           (changedUpdate [_ _] (clear-result)))))
+      (.addActionListener
+       tax-cb
+       (reify java.awt.event.ActionListener
+         (actionPerformed [_ _] (clear-result)))))
+    {:panel scroll :fields fields :tax-cb tax-cb :calc-btn calculate-btn
+     :source-label source-label
+     :result result :source-state (atom nil)}))
+
+(defn show-kalp-source! [ui object-name]
+  (.setText (:source-label ui)
+            (str "<html>Bostadsuppgifter från: "
+                 (escape-html (if (str/blank? object-name) "Nytt objekt" object-name))
+                 "</html>")))
+
+(defn show-kalp-result! [ui data]
+  (let [result (:result ui)
+        {:keys [actual stress income expenses inputs]} data
+        amount #(str (calc/money %) " kr/mån")
+        rows [["Nettoinkomst inklusive bidrag" (amount income)]
+              ["Övriga utgifter inklusive buffert" (amount expenses)]
+              ["Boendekostnad vid avtalad ränta" (amount (:housing actual))]
+              ["Ränta vid avtalad ränta" (amount (:interest actual))]
+              ["Skattereduktion vid avtalad ränta" (amount (:tax-reduction actual))]
+              ["Amortering" (amount (:amortization inputs))]
+              ["Månadsavgift" (amount (:fee inputs))]
+              ["Driftskostnad" (amount (:operating-cost inputs))]
+              ["Kvar vid avtalad ränta" (amount (:remaining actual))]
+              ["Boendekostnad vid kalkylränta" (amount (:housing stress))]
+              ["Kvar vid kalkylränta" (amount (:remaining stress))]
+              ["Ränta vid kalkylränta" (amount (:interest stress))]
+              ["Skattereduktion vid kalkylränta" (amount (:tax-reduction stress))]]
+        card (result-section "Sammanfattning · Kvar att leva på" rows)
+        status (result-label
+                (str "<html>"
+                     (cond
+                       (neg? (:remaining stress)) "Underskott vid kalkylräntan."
+                       (zero? (:remaining stress)) "Budgeten är i balans utan marginal vid kalkylräntan."
+                       :else "Budgeten har ett överskott vid kalkylräntan.")
+                     "<br>Kalkylränta: " (calc/percent (:stress-interest inputs))
+                     " %. Oförändrat lånebelopp och amortering."
+                     "<br>Detta är inte bankens kreditprövning. Kontrollera alla kostnader.</html>")
+                13 true (if (neg? (:remaining stress)) red green))]
+    (.add card status BorderLayout/SOUTH)
+    (.removeAll result)
+    (.add result card BorderLayout/CENTER)
+    (.revalidate result)
+    (.repaint result)))
+
+(defn clear-kalp-result! [ui]
+  (.removeAll (:result ui))
+  (.revalidate (:result ui))
+  (.repaint (:result ui)))
+
 (defn create-ui []
   (doseq [key ["Label.font" "Menu.font" "MenuItem.font" "OptionPane.font"
                "CheckBox.font"]]
@@ -710,7 +841,9 @@
         borrower-count-cb (JComboBox. (into-array Integer
                                                   [(Integer/valueOf 1)
                                                    (Integer/valueOf 2)]))
-        extra-amort-cb (JCheckBox. "Räkna med extra amortering vid hög skuldkvot")]
+        extra-amort-cb (JCheckBox. "Räkna med extra amortering vid hög skuldkvot")
+        tabs (JTabbedPane.)
+        kalp-ui (create-kalp-tab)]
 
     (.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
     (.setSize frame 940 940)
@@ -835,11 +968,14 @@
        app-scroll-pane JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
       (.setUnitIncrement (.getVerticalScrollBar app-scroll-pane) 20)
       (.setBackground (.getViewport app-scroll-pane) background)
-      (.add frame app-scroll-pane))
+      (.setFont tabs (Font. ui-font Font/BOLD 14))
+      (.addTab tabs "Bolån" app-scroll-pane)
+      (.addTab tabs "Kvar att leva på" (:panel kalp-ui))
+      (.add frame tabs))
 
     (.setVisible frame true)
 
-    {:frame frame :results results :calc-btn calc-btn
+    {:frame frame :results results :calc-btn calc-btn :tabs tabs :kalp kalp-ui
      :maximum-cost-btn maximum-cost-btn :save-btn save-btn
      :delete-btn delete-btn
      :new-object-item new-object-item :objects-menu objects-menu

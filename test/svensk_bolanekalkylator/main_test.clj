@@ -60,6 +60,79 @@
    :extra-amort-cb (JCheckBox.)
    :borrower-count-cb (JComboBox. (into-array Integer [(Integer/valueOf 1)]))})
 
+(deftest kalp-prefill-and-session-only-calculation
+  (let [ui (assoc (presentation-ui) :kalp (gui/create-kalp-tab))
+        fields (get-in ui [:kalp :fields])
+        errors (atom [])]
+    (main/prefill-kalp! ui true)
+    (is (= "2500000.0" (.getText (:loan fields))))
+    (is (= "4000" (.getText (:fee fields))))
+    (is (= "1000" (.getText (:operating-cost fields))))
+    (is (= "4.0" (.getText (:interest fields))))
+    (is (= "" (.getText (:net-income fields))))
+    (is (= "" (.getText (:living-cost fields))))
+    (.setText (:fee fields) "4500")
+    (main/prefill-kalp! ui false)
+    (is (= "4500" (.getText (:fee fields))))
+    (.setText (:fee-f ui) "5000")
+    (main/prefill-kalp! ui false)
+    (is (= "5000" (.getText (:fee fields))))
+    (.setText (:net-income fields) "40000")
+    (.setText (:living-cost fields) "12000")
+    (with-redefs [gui/show-error! (fn [& args] (swap! errors conj args))]
+      (is (map? (main/calculate-kalp! ui)))
+      (.setText (:net-income fields) "NaN")
+      (is (nil? (main/calculate-kalp! ui))))
+    (is (= 1 (count @errors)))
+    (is (zero? (.getComponentCount (get-in ui [:kalp :result]))))
+    (let [complete-ui (merge ui
+                             (into {} (map (fn [[key _]]
+                                             [key (or (get ui key) (JTextField.))])
+                                           main/field-keys)))
+          state (main/editable-state complete-ui)
+          object (main/object-from-ui complete-ui {:loan 2500000.0})]
+      (is (not (contains? state :kalp)))
+      (is (= (set (concat (map second main/field-keys)
+                          [:interest-slider-value :borrower-count
+                           :extra-amortization? :calculation :result-text]))
+             (set (keys object)))))
+    (main/prefill-kalp! ui true)
+    (is (= "" (.getText (:net-income fields))))
+    (is (= "5000" (.getText (:fee fields))))))
+
+(deftest saved-object-restores-related-kalp-inputs-only
+  (let [ui (merge (presentation-ui)
+                  {:kalp (gui/create-kalp-tab)
+                   :borrower-count-cb (JComboBox. (into-array Integer
+                                                              [(Integer/valueOf 1)
+                                                               (Integer/valueOf 2)]))
+                   :listing-link (javax.swing.JEditorPane.)
+                   :rate-label (javax.swing.JLabel.)}
+                  (into {} (map (fn [[key _]] [key (JTextField.)])
+                                main/field-keys)))
+        fields (get-in ui [:kalp :fields])]
+    (main/restore-object!
+     ui {:name "Sparad bostad"
+         :purchase-price "3000000" :down-payment "600000"
+         :monthly-fee "4500" :monthly-operating-cost "1500"
+         :annual-income "800000" :interest-slider-value 80
+         :extra-amortization? false :borrower-count 2})
+    (is (= "2400000.0" (.getText (:loan fields))))
+    (is (= "4000.0" (.getText (:amortization fields))))
+    (is (= "4500" (.getText (:fee fields))))
+    (is (= "1500" (.getText (:operating-cost fields))))
+    (is (= "2" (.getText (:borrowers fields))))
+    (is (= "" (.getText (:net-income fields))))
+    (is (.contains (.getText (get-in ui [:kalp :source-label])) "Sparad bostad"))
+    (.setText (:net-income fields) "45000")
+    (main/restore-object!
+     ui {:name "Ny bostad"
+         :purchase-price "2000000" :down-payment "600000"
+         :monthly-fee "2000" :monthly-operating-cost "1000"
+         :interest-slider-value 60 :extra-amortization? false})
+    (is (= "" (.getText (:net-income fields))))
+    (is (= "1400000.0" (.getText (:loan fields))))))
+
 (deftest explicit-calculation-presents-fresh-results-every-time
   (let [ui (presentation-ui)
         presentations (atom [])]
