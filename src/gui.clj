@@ -839,18 +839,41 @@
               ["Kvar vid kalkylränta" (amount (:remaining stress))]
               ["Ränta vid kalkylränta" (amount (:interest stress))]
               ["Skattereduktion vid kalkylränta" (amount (:tax-reduction stress))]]
+        status-message (cond
+                         (neg? (:remaining stress)) "Underskott vid kalkylräntan."
+                         (zero? (:remaining stress))
+                         "Budgeten är i balans utan marginal vid kalkylräntan."
+                         :else "Budgeten har ett överskott vid kalkylräntan.")
+        rate-message (str "Kalkylränta: " (calc/percent (:stress-interest inputs))
+                          " %. Oförändrat lånebelopp och amortering.")
+        disclaimer "Detta är inte bankens kreditprövning. Kontrollera alla kostnader."
+        clipboard-text (str/join
+                        "\n"
+                        (concat ["Kvar att leva på" "" "Sammanfattning"]
+                                (map (fn [[label value]] (str label ": " value)) rows)
+                                ["" status-message rate-message disclaimer]))
         card (result-section "Sammanfattning · Kvar att leva på" rows)
         status (result-label
-                (str "<html>"
-                     (cond
-                       (neg? (:remaining stress)) "Underskott vid kalkylräntan."
-                       (zero? (:remaining stress)) "Budgeten är i balans utan marginal vid kalkylräntan."
-                       :else "Budgeten har ett överskott vid kalkylräntan.")
-                     "<br>Kalkylränta: " (calc/percent (:stress-interest inputs))
-                     " %. Oförändrat lånebelopp och amortering."
-                     "<br>Detta är inte bankens kreditprövning. Kontrollera alla kostnader.</html>")
-                13 true (if (neg? (:remaining stress)) red green))]
-    (.add card status BorderLayout/SOUTH)
+                (str "<html>" status-message "<br>" rate-message
+                     "<br>" disclaimer "</html>")
+                13 true (if (neg? (:remaining stress)) red green))
+        footer (JPanel. (BorderLayout. 0 8))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 0 0))
+        copy-btn (rounded-button "Kopiera till urklipp" green green-hover)]
+    (.setOpaque footer false)
+    (.setOpaque actions false)
+    (.setPreferredSize copy-btn (Dimension. 180 42))
+    (.add actions copy-btn)
+    (.add footer status BorderLayout/CENTER)
+    (.add footer actions BorderLayout/SOUTH)
+    (.addActionListener
+     copy-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (copy-to-clipboard!
+          (javax.swing.SwingUtilities/getWindowAncestor result)
+          clipboard-text))))
+    (.add card footer BorderLayout/SOUTH)
     (.removeAll result)
     (.add result card BorderLayout/CENTER)
     (.revalidate result)

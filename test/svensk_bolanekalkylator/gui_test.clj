@@ -177,6 +177,32 @@
       (is (= "Kunde inte kopiera" (second (first @messages))))
       (is (empty? @toasts)))))
 
+(deftest kalp-result-can-be-copied
+  (let [ui (gui/create-kalp-tab)
+        clipboard (Clipboard. "kalp-test")
+        toasts (atom [])]
+    (gui/show-kalp-result! ui (kalp/calculate kalp-test/inputs))
+    (let [copy-btn (first (filter
+                           #(and (instance? JButton %)
+                                 (= "Kopiera till urklipp" (.getText ^JButton %)))
+                           (components (:result ui))))]
+      (is (some? copy-btn))
+      (with-redefs [gui/system-clipboard (fn [] clipboard)
+                    gui/show-toast! (fn [owner message]
+                                      (swap! toasts conj [owner message]))]
+        (.doClick ^JButton copy-btn))
+      (let [copied (.getData clipboard DataFlavor/stringFlavor)]
+        (is (.startsWith ^String copied
+                         "Kvar att leva på\n\nSammanfattning\n"))
+        (is (.contains ^String copied
+                       "Kvar vid kalkylränta: 1000,00 kr/mån"))
+        (is (.contains ^String copied
+                       "Budgeten har ett överskott vid kalkylräntan."))
+        (is (.endsWith ^String copied
+                       "Detta är inte bankens kreditprövning. Kontrollera alla kostnader."))
+        (is (not (.contains ^String copied "<html>"))))
+      (is (= [[nil "Sparad till urklipp!"]] @toasts)))))
+
 (deftest kalp-tab-and-readable-summary
   (when-not (GraphicsEnvironment/isHeadless)
     (SwingUtilities/invokeAndWait
