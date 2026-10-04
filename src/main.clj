@@ -185,25 +185,31 @@
           (gui/show-error! (:frame ui)
                            "Ogiltig månadsgräns"
                            "Ange ett belopp som är större än noll.")
-          (if-let [purchase-price
-                   (calc/maximum-purchase-price
-                    maximum-cost
-                    (parse-number (:d-pay-f ui))
-                    (slider-interest (:rate-slider ui))
-                    (parse-number (:fee-f ui))
-                    (parse-number (:op-cost-f ui))
-                    (parse-number (:income-f ui))
-                    (parse-number (:t-low-f ui))
-                    (parse-number (:t-high-f ui))
-                    (.isSelected (:extra-amort-cb ui))
-                    (int (.getSelectedItem (:borrower-count-cb ui))))]
-            (do
-              (.setText (:p-price-f ui) (format "%.0f" purchase-price))
-              (calculate-ui! ui))
-            (gui/show-error!
-             (:frame ui)
-             "Månadsgränsen är för låg"
-             "Gränsen täcker inte månadsavgiften och driftskostnaden."))))
+          (let [extra-amortization? (.isSelected (:extra-amort-cb ui))
+                annual-income (if extra-amortization?
+                                (parse-number
+                                 (:income-f ui)
+                                 "hushållets bruttoinkomst")
+                                0.0)]
+            (if-let [purchase-price
+                     (calc/maximum-purchase-price
+                      maximum-cost
+                      (parse-number (:d-pay-f ui) "kontantinsats")
+                      (slider-interest (:rate-slider ui))
+                      (parse-number (:fee-f ui) "månadsavgift")
+                      (parse-number (:op-cost-f ui) "driftskostnad")
+                      annual-income
+                      (* 100.0 calc/tax-reduction-low)
+                      (* 100.0 calc/tax-reduction-high)
+                      extra-amortization?
+                      (int (.getSelectedItem (:borrower-count-cb ui))))]
+              (do
+                (.setText (:p-price-f ui) (format "%.0f" purchase-price))
+                (calculate-ui! ui))
+              (gui/show-error!
+               (:frame ui)
+               "Månadsgränsen är för låg"
+               "Gränsen täcker inte månadsavgiften och driftskostnaden.")))))
       (catch Exception _
         (gui/show-error!
          (:frame ui)

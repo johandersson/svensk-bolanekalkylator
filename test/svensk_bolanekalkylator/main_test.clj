@@ -1,5 +1,6 @@
 (ns svensk-bolanekalkylator.main-test
   (:require [clojure.test :refer [deftest is testing]]
+            [gui :as gui]
             [main :as main]
             [storage :as storage])
   (:import [javax.swing JCheckBox JComboBox JSlider JTextArea JTextField]))
@@ -44,6 +45,33 @@
     (testing "income is required when debt-to-income amortization is enabled"
       (is (= [nil "Fel: Fyll i hushållets bruttoinkomst."]
              (calculate true))))))
+
+(deftest maximum-cost-allows-blank-income-without-extra-amortization
+  (doseq [maximum-cost ["17000" "24000"]]
+    (let [errors (atom [])
+          ui {:frame nil
+              :results (JTextArea.)
+              :p-price-f (JTextField.)
+              :d-pay-f (JTextField. "500000")
+              :fee-f (JTextField. "10000")
+              :op-cost-f (JTextField. "500")
+              :income-f (JTextField.)
+              :t-low-f (JTextField. "30")
+              :t-high-f (JTextField. "21")
+              :rate-slider (doto (JSlider.) (.setValue 59))
+              :extra-amort-cb (JCheckBox.)
+              :borrower-count-cb
+              (doto (JComboBox. (into-array Integer
+                                            [(Integer/valueOf 1)
+                                             (Integer/valueOf 2)]))
+                (.setSelectedItem (Integer/valueOf 2)))}]
+      (with-redefs [gui/ask-maximum-cost! (fn [_] maximum-cost)
+                    gui/show-error! (fn [_ title message]
+                                      (swap! errors conj [title message]))]
+        (main/apply-maximum-cost! ui))
+      (is (empty? @errors))
+      (is (pos? (Double/parseDouble (.getText (:p-price-f ui)))))
+      (is (not-empty (.getText (:results ui)))))))
 
 (deftest autosave-updates-the-opened-object
   (let [opened-object {:name "Gammalt namn"
