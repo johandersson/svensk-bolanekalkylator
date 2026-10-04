@@ -200,7 +200,7 @@
     (.setVisible toast true)
     (.start timer)))
 
-(defn show-error! [frame title-text message]
+(defn- show-message! [frame title-text message]
   (let [dialog (JDialog. frame title-text true)
         root (JPanel. (BorderLayout. 0 18))
         title (JLabel. title-text)
@@ -232,6 +232,12 @@
     (.setResizable dialog false)
     (.setLocationRelativeTo dialog frame)
     (.setVisible dialog true)))
+
+(defn show-error! [frame title-text message]
+  (show-message! frame title-text message))
+
+(defn show-info! [frame title-text message]
+  (show-message! frame title-text message))
 
 (defn confirm-delete! [frame object-name]
   (let [confirmed? (atom false)
@@ -427,6 +433,7 @@
         object-list (JList. (into-array String labels))
         scroll-pane (JScrollPane. object-list)
         actions (JPanel. (FlowLayout. FlowLayout/RIGHT 10 0))
+        create-btn (rounded-button "Skapa nytt objekt" green green-hover)
         cancel-btn (rounded-button "Avbryt" (Color. 100 116 139)
                                    (Color. 71 85 105))
         open-btn (rounded-button "Öppna objekt" blue blue-hover)
@@ -460,10 +467,18 @@
     (.setBackground (.getViewport scroll-pane) surface)
 
     (.setOpaque actions false)
+    (.setPreferredSize create-btn (Dimension. 170 42))
     (.setPreferredSize cancel-btn (Dimension. 110 42))
     (.setPreferredSize open-btn (Dimension. 150 42))
+    (.add actions create-btn)
     (.add actions cancel-btn)
     (.add actions open-btn)
+    (.addActionListener
+     create-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (reset! selected-index :new-object)
+         (.dispose dialog))))
     (.addActionListener
      cancel-btn
      (reify java.awt.event.ActionListener

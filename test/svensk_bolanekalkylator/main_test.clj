@@ -51,7 +51,7 @@
     (let [errors (atom [])
           ui {:frame nil
               :results (JTextArea.)
-              :p-price-f (JTextField.)
+              :p-price-f (JTextField. "500000")
               :d-pay-f (JTextField. "500000")
               :fee-f (JTextField. "10000")
               :op-cost-f (JTextField. "500")
@@ -72,6 +72,41 @@
       (is (empty? @errors))
       (is (pos? (Double/parseDouble (.getText (:p-price-f ui)))))
       (is (not-empty (.getText (:results ui)))))))
+
+(deftest maximum-cost-keeps-a-higher-original-purchase-price
+  (let [errors (atom [])
+        info-messages (atom [])
+        original-result "Befintlig kalkyl"
+        ui {:frame nil
+            :results (JTextArea. original-result)
+            :p-price-f (JTextField. "3390000")
+            :d-pay-f (JTextField. "500000")
+            :fee-f (JTextField. "10000")
+            :op-cost-f (JTextField. "500")
+            :income-f (JTextField.)
+            :rate-slider (doto (JSlider.) (.setValue 59))
+            :extra-amort-cb (JCheckBox.)
+            :borrower-count-cb
+            (doto (JComboBox. (into-array Integer
+                                          [(Integer/valueOf 1)
+                                           (Integer/valueOf 2)]))
+              (.setSelectedItem (Integer/valueOf 2)))}]
+    (with-redefs [gui/ask-maximum-cost! (fn [_] "17000")
+                  gui/show-error! (fn [_ title message]
+                                    (swap! errors conj [title message]))
+                  gui/show-info! (fn [_ title message]
+                                   (swap! info-messages conj [title message]))]
+      (main/apply-maximum-cost! ui))
+    (is (empty? @errors))
+    (is (= 1 (count @info-messages)))
+    (is (= "3390000" (.getText (:p-price-f ui))))
+    (is (= original-result (.getText (:results ui))))))
+
+(deftest creating-new-object-from-startup-dialog-keeps-blank-object
+  (with-redefs [gui/choose-object! (fn [_ _] :new-object)]
+    (is (nil? (main/choose-startup-object
+               nil
+               [{:name "Sparat objekt"}])))))
 
 (deftest autosave-updates-the-opened-object
   (let [opened-object {:name "Gammalt namn"

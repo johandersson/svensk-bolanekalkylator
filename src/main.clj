@@ -190,7 +190,9 @@
                                 (parse-number
                                  (:income-f ui)
                                  "hushållets bruttoinkomst")
-                                0.0)]
+                                0.0)
+                original-purchase-price
+                (parse-number (:p-price-f ui) "köpeskilling")]
             (if-let [purchase-price
                      (calc/maximum-purchase-price
                       maximum-cost
@@ -203,9 +205,15 @@
                       (* 100.0 calc/tax-reduction-high)
                       extra-amortization?
                       (int (.getSelectedItem (:borrower-count-cb ui))))]
-              (do
-                (.setText (:p-price-f ui) (format "%.0f" purchase-price))
-                (calculate-ui! ui))
+              (if (< purchase-price original-purchase-price)
+                (gui/show-info!
+                 (:frame ui)
+                 "Ingen ändring gjordes"
+                 (str "Den angivna månadsgränsen skulle sänka "
+                      "köpeskillingen. Den befintliga kalkylen har behållits."))
+                (do
+                  (.setText (:p-price-f ui) (format "%.0f" purchase-price))
+                  (calculate-ui! ui)))
               (gui/show-error!
                (:frame ui)
                "Månadsgränsen är för låg"
@@ -283,7 +291,7 @@
 (defn choose-startup-object [frame objects]
   (let [labels (mapv object-label (range) objects)
         selected-index (gui/choose-object! frame labels)]
-    (when (some? selected-index)
+    (when (int? selected-index)
       [(nth objects selected-index)
        (nth labels selected-index)])))
 
