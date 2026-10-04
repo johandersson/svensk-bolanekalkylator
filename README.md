@@ -4,6 +4,12 @@ En skrivbordsapplikation i Clojure för att beräkna kostnader för svenska
 bolån. Kalkylatorn visar bland annat lånebelopp, belåningsgrad, ränta,
 amortering, skattereduktion och total månadskostnad.
 
+Varje klick på **Beräkna bolån** visar en läsbar sammanställning i ett
+separat fönster, centrerat och mindre än huvudfönstret. Huvudfönstret är
+låst tills sammanställningen stängs med **Stäng**, Escape eller fönstrets
+stängningsknapp. Resultattexten i huvudfönstret finns kvar och uppdateras
+som tidigare. Vid ogiltiga uppgifter visas ett fel i stället.
+
 Flera bostadsobjekt kan sparas lokalt med adress, kommentar, annonslänk,
 inmatade värden och beräknat resultat. Sparade objekt kan sedan väljas och
 öppnas från programmets objektmeny.

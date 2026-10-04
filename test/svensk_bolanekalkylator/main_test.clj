@@ -46,6 +46,60 @@
       (is (= [nil "Fel: Fyll i hushållets bruttoinkomst."]
              (calculate true))))))
 
+(defn presentation-ui []
+  {:frame nil
+   :name-f (JTextField. "Testbostad")
+   :address-f (JTextField. "Testgatan 1")
+   :results (JTextArea.)
+   :p-price-f (JTextField. "3000000")
+   :d-pay-f (JTextField. "500000")
+   :fee-f (JTextField. "4000")
+   :op-cost-f (JTextField. "1000")
+   :income-f (JTextField.)
+   :rate-slider (doto (JSlider.) (.setValue 80))
+   :extra-amort-cb (JCheckBox.)
+   :borrower-count-cb (JComboBox. (into-array Integer [(Integer/valueOf 1)]))})
+
+(deftest explicit-calculation-presents-fresh-results-every-time
+  (let [ui (presentation-ui)
+        presentations (atom [])]
+    (with-redefs [gui/show-calculation!
+                  (fn [frame data details]
+                    (swap! presentations conj [frame data details]))]
+      (main/calculate-and-present! ui)
+      (main/calculate-and-present! ui)
+      (.setText (:p-price-f ui) "3500000")
+      (main/calculate-and-present! ui)
+      (is (= 3 (count @presentations)))
+      (is (= [2500000.0 2500000.0 3000000.0]
+             (mapv #(get-in % [1 :loan]) @presentations)))
+      (is (= {:object-name "Testbostad"
+              :address "Testgatan 1"
+              :purchase-price 3500000.0
+              :down-payment 500000.0
+              :interest 4.0
+              :monthly-fee 4000.0
+              :monthly-operating-cost 1000.0}
+             (get-in @presentations [2 2])))
+      (is (.contains (.getText (:results ui)) "3000000,00"))
+      (testing "automatic calculations still only update the original text"
+        (main/calculate-ui! ui)
+        (is (= 3 (count @presentations)))))))
+
+(deftest invalid-calculation-does-not-present-stale-results
+  (let [ui (presentation-ui)
+        errors (atom [])]
+    (main/calculate-ui! ui)
+    (.setText (:p-price-f ui) "")
+    (with-redefs [gui/show-calculation! (fn [& _]
+                                          (is false "No results dialog on invalid input"))
+                  gui/show-error! (fn [_ title message]
+                                    (swap! errors conj [title message]))]
+      (main/calculate-and-present! ui))
+    (is (= "Fel: Fyll i köpeskilling." (.getText (:results ui))))
+    (is (= [["Kontrollera uppgifterna" "Fel: Fyll i köpeskilling."]]
+           @errors))))
+
 (deftest maximum-cost-allows-blank-income-without-extra-amortization
   (doseq [maximum-cost ["17000" "24000"]]
     (let [errors (atom [])

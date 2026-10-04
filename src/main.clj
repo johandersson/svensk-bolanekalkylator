@@ -177,6 +177,21 @@
    (:extra-amort-cb ui)
    (:borrower-count-cb ui)))
 
+(defn calculate-and-present! [ui]
+  (if-let [calculation (calculate-ui! ui)]
+    (gui/show-calculation!
+     (:frame ui)
+     calculation
+     {:object-name (.getText (:name-f ui))
+      :address (.getText (:address-f ui))
+      :purchase-price (parse-number (:p-price-f ui))
+      :down-payment (parse-number (:d-pay-f ui))
+      :interest (slider-interest (:rate-slider ui))
+      :monthly-fee (parse-number (:fee-f ui))
+      :monthly-operating-cost (parse-number (:op-cost-f ui))})
+    (gui/show-error! (:frame ui) "Kontrollera uppgifterna"
+                     (.getText (:results ui)))))
+
 (defn apply-maximum-cost! [ui]
   (when-let [input (gui/ask-maximum-cost! (:frame ui))]
     (try
@@ -399,7 +414,7 @@
        calc-btn
        (reify java.awt.event.ActionListener
          (actionPerformed [_ _]
-           (calculate-ui! ui))))
+           (calculate-and-present! ui))))
 
       (.addActionListener
        maximum-cost-btn

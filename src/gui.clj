@@ -1,9 +1,12 @@
 (ns gui
-  (:require [clojure.string :as str])
+  (:require [calculator :as calc]
+            [clojure.string :as str])
   (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
             Font Graphics2D GridLayout Insets Point Rectangle RenderingHints]
            [java.awt.event InputEvent KeyEvent]
            [java.net URI]
+           [java.text NumberFormat]
+           [java.util Locale]
            [javax.swing AbstractAction BorderFactory JButton JCheckBox JComboBox JComponent
             JDialog JFrame JLabel JPanel JEditorPane JList JMenu JMenuBar
             JOptionPane JScrollPane JTextArea JTextField SwingConstants JSlider
@@ -238,6 +241,127 @@
 
 (defn show-info! [frame title-text message]
   (show-message! frame title-text message))
+
+(defn- result-label [text size bold? color]
+  (doto (JLabel. text)
+    (.setFont (Font. ui-font (if bold? Font/BOLD Font/PLAIN) size))
+    (.setForeground color)))
+
+(defn- result-section [title-text rows]
+  (let [panel (shadow-panel (BorderLayout. 0 12))
+        fields (JPanel. (GridLayout. 0 2 16 10))]
+    (.setOpaque fields false)
+    (.add panel (result-label title-text 17 true text-primary)
+          BorderLayout/NORTH)
+    (doseq [[label value] rows]
+      (.add fields (result-label label 14 false text-secondary))
+      (.add fields (doto (result-label value 14 true text-primary)
+                     (.setHorizontalAlignment SwingConstants/RIGHT))))
+    (.add panel fields BorderLayout/CENTER)
+    panel))
+
+(defn create-calculation-dialog
+  [^JFrame frame data {:keys [object-name address purchase-price down-payment
+                              interest monthly-fee monthly-operating-cost]}]
+  (let [dialog (JDialog. frame "Bolånekalkyl" true)
+        root (JPanel. (BorderLayout. 0 16))
+        heading (JPanel. (GridLayout. 0 1 0 6))
+        body (scrollable-panel (GridLayout. 0 1 0 12))
+        cards (JPanel. (BorderLayout. 0 12))
+        sections (JPanel. (GridLayout. 0 1 0 12))
+        summary (shadow-panel (GridLayout. 0 1 0 6))
+        scroll-pane (JScrollPane. body)
+        footer (JPanel. (BorderLayout. 12 0))
+        close-btn (rounded-button "Stäng" blue blue-hover)
+        currency (doto (NumberFormat/getNumberInstance
+                        (Locale/forLanguageTag "sv-SE"))
+                   (.setMinimumFractionDigits 2)
+                   (.setMaximumFractionDigits 2))
+        kronor (fn [value] (str (.format currency (double value)) " kr"))
+        percentage (fn [value] (str (calc/percent value) " %"))
+        context (str/join " · " (remove str/blank? [object-name address]))
+        close-action (proxy [AbstractAction] []
+                       (actionPerformed [_] (.dispose dialog)))]
+    (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
+    (.setBackground root background)
+    (.setBorder root (BorderFactory/createEmptyBorder 24 24 20 24))
+    (doseq [panel [heading body cards sections footer]]
+      (.setOpaque panel false))
+    (.add heading (result-label "Din bolånekalkyl" 26 true text-primary))
+    (when-not (str/blank? context)
+      (.add heading
+            (result-label (str "<html>" (escape-html context) "</html>")
+                          14 false text-secondary)))
+    (.add summary (result-label "Total månadskostnad efter skattereduktion"
+                                15 false text-secondary))
+    (.add summary (result-label
+                   (str (kronor (:monthly-payment-after-tax data)) "/mån")
+                   32 true blue))
+    (.add summary (result-label
+                   (str "Före skattereduktion: "
+                        (kronor (:monthly-payment-before-tax data)) "/mån")
+                   14 false text-secondary))
+    (.add sections
+          (result-section
+           "Bostad och lån"
+           [["Köpeskilling" (kronor purchase-price)]
+            ["Kontantinsats" (kronor down-payment)]
+            ["Lånebelopp" (kronor (:loan data))]
+            ["Belåningsgrad" (percentage (* 100.0 (:loan-to-value data)))]
+            ["Räntesats" (percentage interest)]
+            ["Antal låntagare" (str (:borrower-count data))]]))
+    (.add sections
+          (result-section
+           "Månadskostnad"
+           [["Ränta före skattereduktion" (kronor (:monthly-interest-cost data))]
+            ["Beräknad skattereduktion" (kronor (:monthly-tax-reduction data))]
+            ["Ränta efter skattereduktion" (kronor (:monthly-interest-after-tax data))]
+            ["Amortering" (kronor (:monthly-amortization data))]
+            ["Månadsavgift" (kronor monthly-fee)]
+            ["Driftskostnad" (kronor monthly-operating-cost)]]))
+    (.add sections
+          (result-section
+           "Amortering"
+           [["Grundläggande amortering"
+             (str (percentage (:basic-amortization-percent data)) " per år")]
+            ["Extra amortering"
+             (str (percentage (:extra-amortization-percent data)) " per år")]
+            ["Total amortering"
+             (str (percentage (:total-amortization-percent data)) " per år")]]))
+    (.add cards summary BorderLayout/NORTH)
+    (.add cards sections BorderLayout/CENTER)
+    (.add body cards)
+    (.setBorder scroll-pane nil)
+    (.setHorizontalScrollBarPolicy scroll-pane JScrollPane/HORIZONTAL_SCROLLBAR_NEVER)
+    (.setBackground (.getViewport scroll-pane) background)
+    (.setUnitIncrement (.getVerticalScrollBar scroll-pane) 24)
+    (.add footer
+          (result-label
+           (str "<html>Genomsnitt per månad under första året.<br>"
+                "Prognosen antar ett bolån med bostaden som säkerhet,<br>"
+                (:borrower-count data)
+                " låntagare med jämn räntefördelning och tillräcklig skatt.</html>")
+           12 false text-secondary)
+          BorderLayout/CENTER)
+    (.add footer close-btn BorderLayout/EAST)
+    (.addActionListener close-btn close-action)
+    (.setDefaultButton (.getRootPane dialog) close-btn)
+    (.put (.getInputMap (.getRootPane dialog) JComponent/WHEN_IN_FOCUSED_WINDOW)
+          (KeyStroke/getKeyStroke KeyEvent/VK_ESCAPE 0) "close-results")
+    (.put (.getActionMap (.getRootPane dialog)) "close-results" close-action)
+    (.add root heading BorderLayout/NORTH)
+    (.add root scroll-pane BorderLayout/CENTER)
+    (.add root footer BorderLayout/SOUTH)
+    (.setContentPane dialog root)
+    (.setSize dialog
+              (int (min 800 (* 0.85 (.getWidth frame))))
+              (int (min 800 (* 0.85 (.getHeight frame)))))
+    (.setResizable dialog false)
+    (.setLocationRelativeTo dialog frame)
+    dialog))
+
+(defn show-calculation! [frame data details]
+  (.setVisible (create-calculation-dialog frame data details) true))
 
 (defn confirm-delete! [frame object-name]
   (let [confirmed? (atom false)
