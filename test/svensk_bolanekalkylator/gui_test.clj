@@ -3,14 +3,18 @@
             [clojure.test :refer [deftest is]]
             [gui :as gui])
   (:import [java.awt Container GraphicsEnvironment]
+           [java.awt.datatransfer Clipboard DataFlavor]
            [java.awt.event ActionEvent WindowEvent]
-           [javax.swing JComponent JFrame JLabel KeyStroke SwingUtilities Timer
+           [javax.swing JButton JComponent JFrame JLabel KeyStroke SwingUtilities Timer
             WindowConstants]))
 
+(defn components [root]
+  (tree-seq #(instance? Container %)
+            #(seq (.getComponents ^Container %))
+            root))
+
 (defn component-labels [root]
-  (->> (tree-seq #(instance? Container %)
-                 #(seq (.getComponents ^Container %))
-                 root)
+  (->> (components root)
        (filter #(instance? JLabel %))
        (map #(.getText ^JLabel %))
        set))
@@ -38,12 +42,44 @@
              (.setSize frame size size)
              (let [dialog (gui/create-calculation-dialog frame data details)
                    root-pane (.getRootPane dialog)
+                   clipboard (Clipboard. "test")
+                   toasts (atom [])
                    observed (atom nil)
                    timer (Timer.
                           50
                           (reify java.awt.event.ActionListener
                             (actionPerformed [_ _]
                               (reset! observed (.isShowing dialog))
+                              (let [copy-btn
+                                    (first (filter
+                                            #(and (instance? JButton %)
+                                                  (= "Kopiera till urklipp"
+                                                     (.getText ^JButton %)))
+                                            (components (.getContentPane dialog))))]
+                                (with-redefs [gui/system-clipboard (fn [] clipboard)
+                                              gui/show-toast!
+                                              (fn [owner message]
+                                                (swap! toasts conj [owner message]))]
+                                  (.doClick ^JButton copy-btn))
+                                (let [copied (.getData clipboard DataFlavor/stringFlavor)]
+                                  (is (.startsWith ^String copied
+                                                   "Din bolånekalkyl\nTest <b>bostad</b> · Testgatan 1\n\n"))
+                                  (is (.endsWith ^String copied
+                                                 "2 låntagare med jämn räntefördelning och tillräcklig skatt."))
+                                  (is (not (.contains ^String copied "<html>")))
+                                  (doseq [label (component-labels (.getContentPane dialog))
+                                          :when (not (.startsWith ^String label "<html>"))]
+                                    (is (.contains ^String copied label) label)))
+                                (is (= [[dialog "Sparad till urklipp!"]] @toasts))
+                                (is (.isShowing dialog))
+                                (gui/show-toast! dialog "Sparad till urklipp!")
+                                (let [toast (first (.getOwnedWindows dialog))]
+                                  (is (some? toast))
+                                  (when toast
+                                    (is (.isShowing toast))
+                                    (is (contains? (component-labels toast)
+                                                   "Sparad till urklipp!"))
+                                    (.dispose toast))))
                               (doseq [component
                                       (tree-seq
                                        #(instance? Container %)
@@ -95,3 +131,16 @@
                    (.dispose dialog)))))
            (finally
              (.dispose frame))))))))
+
+(deftest failed-copy-does-not-show-success-toast
+  (doseq [error [(IllegalStateException. "busy")
+                 (SecurityException. "denied")]]
+    (let [messages (atom [])
+          toasts (atom [])]
+      (with-redefs [gui/system-clipboard (fn [] (throw error))
+                    gui/show-error! (fn [& args] (swap! messages conj args))
+                    gui/show-toast! (fn [& args] (swap! toasts conj args))]
+        (gui/copy-to-clipboard! nil "Exact text"))
+      (is (= 1 (count @messages)))
+      (is (= "Kunde inte kopiera" (second (first @messages))))
+      (is (empty? @toasts)))))

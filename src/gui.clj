@@ -1,8 +1,10 @@
 (ns gui
   (:require [calculator :as calc]
             [clojure.string :as str])
-  (:import [java.awt BorderLayout Color Cursor Desktop Dimension FlowLayout
-            Font Graphics2D GridLayout Insets Point Rectangle RenderingHints]
+  (:import [java.awt BorderLayout Color Cursor Desktop Dialog$ModalityType Dimension FlowLayout
+            Font Graphics2D GridLayout Insets Point Rectangle RenderingHints
+            Toolkit Window]
+           [java.awt.datatransfer StringSelection]
            [java.awt.event InputEvent KeyEvent]
            [java.net URI]
            [java.text NumberFormat]
@@ -157,7 +159,7 @@
             (actionPerformed [_]
               (save!))))))
 
-(defn show-toast! [frame message]
+(defn show-toast! [^Window frame message]
   (let [toast (JWindow. frame)
         panel (proxy [JPanel] [(BorderLayout.)]
                 (paintComponent [graphics]
@@ -203,8 +205,8 @@
     (.setVisible toast true)
     (.start timer)))
 
-(defn- show-message! [frame title-text message]
-  (let [dialog (JDialog. frame title-text true)
+(defn- show-message! [^Window frame title-text message]
+  (let [dialog (JDialog. frame title-text Dialog$ModalityType/APPLICATION_MODAL)
         root (JPanel. (BorderLayout. 0 18))
         title (JLabel. title-text)
         body (JLabel. (str "<html><div style='width:320px'>"
@@ -242,6 +244,25 @@
 (defn show-info! [frame title-text message]
   (show-message! frame title-text message))
 
+(defn system-clipboard []
+  (.getSystemClipboard (Toolkit/getDefaultToolkit)))
+
+(defn copy-to-clipboard! [owner text]
+  (let [copied? (try
+                  (.setContents (system-clipboard)
+                                (StringSelection. text) nil)
+                  true
+                  (catch IllegalStateException _
+                    (show-error! owner "Kunde inte kopiera"
+                                 "Urklipp är upptaget. Försök igen.")
+                    false)
+                  (catch SecurityException _
+                    (show-error! owner "Kunde inte kopiera"
+                                 "Programmet saknar behörighet att använda urklipp.")
+                    false))]
+    (when copied?
+      (show-toast! owner "Sparad till urklipp!"))))
+
 (defn- result-label [text size bold? color]
   (doto (JLabel. text)
     (.setFont (Font. ui-font (if bold? Font/BOLD Font/PLAIN) size))
@@ -272,6 +293,8 @@
         summary (shadow-panel (GridLayout. 0 1 0 6))
         scroll-pane (JScrollPane. body)
         footer (JPanel. (BorderLayout. 12 0))
+        actions (JPanel. (FlowLayout. FlowLayout/RIGHT 10 0))
+        copy-btn (rounded-button "Kopiera till urklipp" green green-hover)
         close-btn (rounded-button "Stäng" blue blue-hover)
         currency (doto (NumberFormat/getNumberInstance
                         (Locale/forLanguageTag "sv-SE"))
@@ -280,54 +303,66 @@
         kronor (fn [value] (str (.format currency (double value)) " kr"))
         percentage (fn [value] (str (calc/percent value) " %"))
         context (str/join " · " (remove str/blank? [object-name address]))
+        summary-title "Total månadskostnad efter skattereduktion"
+        summary-value (str (kronor (:monthly-payment-after-tax data)) "/mån")
+        before-tax (str "Före skattereduktion: "
+                        (kronor (:monthly-payment-before-tax data)) "/mån")
+        section-data
+        [["Bostad och lån"
+          [["Köpeskilling" (kronor purchase-price)]
+           ["Kontantinsats" (kronor down-payment)]
+           ["Lånebelopp" (kronor (:loan data))]
+           ["Belåningsgrad" (percentage (* 100.0 (:loan-to-value data)))]
+           ["Räntesats" (percentage interest)]
+           ["Antal låntagare" (str (:borrower-count data))]]]
+         ["Månadskostnad"
+          [["Ränta före skattereduktion" (kronor (:monthly-interest-cost data))]
+           ["Beräknad skattereduktion" (kronor (:monthly-tax-reduction data))]
+           ["Ränta efter skattereduktion" (kronor (:monthly-interest-after-tax data))]
+           ["Amortering" (kronor (:monthly-amortization data))]
+           ["Månadsavgift" (kronor monthly-fee)]
+           ["Driftskostnad" (kronor monthly-operating-cost)]]]
+         ["Amortering"
+          [["Grundläggande amortering"
+            (str (percentage (:basic-amortization-percent data)) " per år")]
+           ["Extra amortering"
+            (str (percentage (:extra-amortization-percent data)) " per år")]
+           ["Total amortering"
+            (str (percentage (:total-amortization-percent data)) " per år")]]]]
+        note (str "Genomsnitt per månad under första året.\n"
+                  "Prognosen antar ett bolån med bostaden som säkerhet,\n"
+                  (:borrower-count data)
+                  " låntagare med jämn räntefördelning och tillräcklig skatt.")
+        clipboard-text
+        (str/join "\n\n"
+                  (concat
+                   [(str "Din bolånekalkyl"
+                         (when-not (str/blank? context) (str "\n" context)))
+                    (str summary-title "\n" summary-value "\n" before-tax)]
+                   (map (fn [[title rows]]
+                          (str title "\n"
+                               (str/join "\n" (map (fn [[label value]]
+                                                     (str label ": " value))
+                                                   rows))))
+                        section-data)
+                   [note]))
         close-action (proxy [AbstractAction] []
                        (actionPerformed [_] (.dispose dialog)))]
     (.setDefaultCloseOperation dialog WindowConstants/DISPOSE_ON_CLOSE)
     (.setBackground root background)
     (.setBorder root (BorderFactory/createEmptyBorder 24 24 20 24))
-    (doseq [panel [heading body cards sections footer]]
+    (doseq [panel [heading body cards sections footer actions]]
       (.setOpaque panel false))
     (.add heading (result-label "Din bolånekalkyl" 26 true text-primary))
     (when-not (str/blank? context)
       (.add heading
             (result-label (str "<html>" (escape-html context) "</html>")
                           14 false text-secondary)))
-    (.add summary (result-label "Total månadskostnad efter skattereduktion"
-                                15 false text-secondary))
-    (.add summary (result-label
-                   (str (kronor (:monthly-payment-after-tax data)) "/mån")
-                   32 true blue))
-    (.add summary (result-label
-                   (str "Före skattereduktion: "
-                        (kronor (:monthly-payment-before-tax data)) "/mån")
-                   14 false text-secondary))
-    (.add sections
-          (result-section
-           "Bostad och lån"
-           [["Köpeskilling" (kronor purchase-price)]
-            ["Kontantinsats" (kronor down-payment)]
-            ["Lånebelopp" (kronor (:loan data))]
-            ["Belåningsgrad" (percentage (* 100.0 (:loan-to-value data)))]
-            ["Räntesats" (percentage interest)]
-            ["Antal låntagare" (str (:borrower-count data))]]))
-    (.add sections
-          (result-section
-           "Månadskostnad"
-           [["Ränta före skattereduktion" (kronor (:monthly-interest-cost data))]
-            ["Beräknad skattereduktion" (kronor (:monthly-tax-reduction data))]
-            ["Ränta efter skattereduktion" (kronor (:monthly-interest-after-tax data))]
-            ["Amortering" (kronor (:monthly-amortization data))]
-            ["Månadsavgift" (kronor monthly-fee)]
-            ["Driftskostnad" (kronor monthly-operating-cost)]]))
-    (.add sections
-          (result-section
-           "Amortering"
-           [["Grundläggande amortering"
-             (str (percentage (:basic-amortization-percent data)) " per år")]
-            ["Extra amortering"
-             (str (percentage (:extra-amortization-percent data)) " per år")]
-            ["Total amortering"
-             (str (percentage (:total-amortization-percent data)) " per år")]]))
+    (.add summary (result-label summary-title 15 false text-secondary))
+    (.add summary (result-label summary-value 32 true blue))
+    (.add summary (result-label before-tax 14 false text-secondary))
+    (doseq [[title rows] section-data]
+      (.add sections (result-section title rows)))
     (.add cards summary BorderLayout/NORTH)
     (.add cards sections BorderLayout/CENTER)
     (.add body cards)
@@ -337,13 +372,19 @@
     (.setUnitIncrement (.getVerticalScrollBar scroll-pane) 24)
     (.add footer
           (result-label
-           (str "<html>Genomsnitt per månad under första året.<br>"
-                "Prognosen antar ett bolån med bostaden som säkerhet,<br>"
-                (:borrower-count data)
-                " låntagare med jämn räntefördelning och tillräcklig skatt.</html>")
+           (str "<html>" (str/replace (escape-html note) "\n" "<br>") "</html>")
            12 false text-secondary)
           BorderLayout/CENTER)
-    (.add footer close-btn BorderLayout/EAST)
+    (.setPreferredSize copy-btn (Dimension. 180 42))
+    (.setPreferredSize close-btn (Dimension. 100 42))
+    (.add actions copy-btn)
+    (.add actions close-btn)
+    (.add footer actions BorderLayout/SOUTH)
+    (.addActionListener
+     copy-btn
+     (reify java.awt.event.ActionListener
+       (actionPerformed [_ _]
+         (copy-to-clipboard! dialog clipboard-text))))
     (.addActionListener close-btn close-action)
     (.setDefaultButton (.getRootPane dialog) close-btn)
     (.put (.getInputMap (.getRootPane dialog) JComponent/WHEN_IN_FOCUSED_WINDOW)

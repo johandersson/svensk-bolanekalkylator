@@ -9,10 +9,14 @@ separat fönster, centrerat och mindre än huvudfönstret. Huvudfönstret är
 låst tills sammanställningen stängs med **Stäng**, Escape eller fönstrets
 stängningsknapp. Resultattexten i huvudfönstret finns kvar och uppdateras
 som tidigare. Vid ogiltiga uppgifter visas ett fel i stället.
+Med **Kopiera till urklipp** kopieras sammanställningens exakta text och
+formaterade belopp som ren text. Bekräftelsen **Sparad till urklipp!**
+visas i resultatfönstret, som förblir öppet.
 
 Flera bostadsobjekt kan sparas lokalt med adress, kommentar, annonslänk,
 inmatade värden och beräknat resultat. Sparade objekt kan sedan väljas och
 öppnas från programmets objektmeny.
+Ändringar i ett öppnat, sparat objekt sparas automatiskt var femte sekund.
 
 ## Köra programmet
 

@@ -324,7 +324,7 @@
         new-object       (editable-state ui)
         saved-state      (atom new-object)
         saved-object     (atom nil)
-        autosave-timer   (Timer. 10000 nil)
+        autosave-timer   (Timer. 5000 nil)
         objects          (store/load-objects)]
     (letfn [(activate-object! [object label persisted-object]
               (restore-object! ui (merge new-object object))
